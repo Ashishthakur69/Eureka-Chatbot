@@ -1,0 +1,16 @@
+flask
+flask-cors
+python-dotenv
+langchain
+langchain-community
+langchain-groq
+ddgs
+tqdm
+gunicorn
+# --- RAG dependencies ---
+pypdf
+sentence-transformers
+langchain-huggingface
+faiss-cpu
+python-docx
+docx2txt
