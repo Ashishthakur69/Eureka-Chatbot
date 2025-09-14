@@ -1,0 +1,12 @@
+# Environment variables
+backend/.env
+
+# Uploaded documents
+backend/uploads/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# OS-specific files
+.DS_Store
