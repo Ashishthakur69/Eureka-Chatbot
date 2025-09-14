@@ -14,3 +14,4 @@ langchain-huggingface
 faiss-cpu
 python-docx
 docx2txt
+gunicorn
