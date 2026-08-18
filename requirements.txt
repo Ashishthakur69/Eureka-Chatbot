@@ -4,6 +4,7 @@ python-dotenv
 langchain
 langchain-community
 langchain-groq
+langchain-text-splitters
 ddgs
 tqdm
 gunicorn
