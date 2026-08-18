@@ -46,8 +46,7 @@ from langchain_core.runnables import (
 from langchain_core.messages import (
     BaseMessage,
     SystemMessage,
-    HumanMessage,
-    ToolMessage
+    HumanMessage
 )
 
 from langchain_community.chat_message_histories import (
@@ -93,6 +92,7 @@ groq_api_key = os.getenv("GROQ_API_KEY")
 
 
 if not groq_api_key:
+
     print(
         "WARNING: GROQ_API_KEY is not configured."
     )
@@ -148,7 +148,6 @@ print(
     "\n--- Initializing HuggingFace Embeddings Model ---"
 )
 
-
 try:
 
     embeddings = HuggingFaceEmbeddings(
@@ -183,7 +182,6 @@ class WindowedChatMessageHistory(ChatMessageHistory):
 
         super().add_message(message)
 
-        # Keep last 5 user/assistant exchanges
         if len(self.messages) > self.k * 2:
 
             self.messages = self.messages[
@@ -219,36 +217,74 @@ def get_session_state(
 
 
 # ============================================================
-# Normal Chat LLM With Tools
+# Determine Whether Web Search Is Needed
 # ============================================================
 
-if llm is not None:
+def needs_web_search(
+    user_message: str
+) -> bool:
 
-    try:
+    search_keywords = [
 
-        llm_with_tools = llm.bind_tools(
-            [search_tool]
-        )
+        # Current information
+        "latest",
+        "recent",
+        "today",
+        "current",
+        "now",
+        "live",
 
-        print(
-            "--- Groq tool calling initialized ---"
-        )
+        # News
+        "news",
+        "breaking",
 
-    except Exception as e:
+        # Sports
+        "score",
+        "scores",
+        "match",
+        "matches",
+        "live score",
+        "result",
+        "results",
+        "standings",
+        "schedule",
 
-        print(
-            f"--- WARNING: Tool calling unavailable: {e} ---"
-        )
+        # Finance
+        "stock",
+        "stocks",
+        "share price",
+        "stock price",
+        "market price",
 
-        llm_with_tools = llm
+        # Weather
+        "weather",
+        "forecast",
+        "temperature today",
 
-else:
+        # Other changing information
+        "price",
+        "schedule",
+        "release date",
+        "released",
+        "update",
+        "updates",
 
-    llm_with_tools = None
+        # Current year
+        "2026"
+    ]
+
+
+    message_lower = user_message.lower()
+
+
+    return any(
+        keyword in message_lower
+        for keyword in search_keywords
+    )
 
 
 # ============================================================
-# Normal Chat Function
+# Normal Chat
 # ============================================================
 
 def run_normal_chat(
@@ -258,164 +294,179 @@ def run_normal_chat(
 
     try:
 
-        if llm_with_tools is None:
+        if llm is None:
 
             return (
                 "The AI model is currently unavailable."
             )
 
 
-        # ----------------------------------------------------
-        # System instruction
-        # ----------------------------------------------------
+        # ====================================================
+        # System Message
+        # ====================================================
 
         system_message = SystemMessage(
             content=(
                 "You are Eureka, a helpful and "
                 "knowledgeable AI assistant.\n\n"
 
-                "Answer general questions using your "
-                "own knowledge.\n\n"
+                "Answer questions clearly and accurately.\n\n"
 
-                "You have access to a DuckDuckGo search "
-                "tool. Use it when the user asks for "
-                "current, recent, real-time, or changing "
+                "Use your own knowledge for general "
+                "questions.\n\n"
+
+                "When web search results are provided, "
+                "use them as the source for current "
                 "information.\n\n"
 
-                "Examples that may require search:\n"
-                "- Current events\n"
-                "- Latest news\n"
-                "- Weather\n"
-                "- Sports scores\n"
-                "- Stock prices\n"
-                "- Current technology information\n"
-                "- Recent releases or updates\n\n"
-
-                "For normal general-knowledge questions, "
-                "answer directly without searching.\n\n"
-
-                "When using search results, synthesize "
-                "the information and do not blindly copy it."
+                "Do not claim information is live or "
+                "current unless it is supported by "
+                "the provided search results."
             )
         )
 
 
-        # ----------------------------------------------------
-        # Previous conversation
-        # ----------------------------------------------------
+        # ====================================================
+        # Conversation History
+        # ====================================================
 
         messages = [
             system_message
         ]
 
+
         messages.extend(
             session_state.history.messages
         )
 
-        messages.append(
-            HumanMessage(
-                content=user_message
+
+        # ====================================================
+        # Decide Whether Search Is Needed
+        # ====================================================
+
+        search_required = needs_web_search(
+            user_message
+        )
+
+
+        # ====================================================
+        # WEB SEARCH MODE
+        # ====================================================
+
+        if (
+            search_required
+            and search_tool is not None
+        ):
+
+            print(
+                "--- Searching DuckDuckGo ---"
             )
-        )
 
 
-        # ----------------------------------------------------
-        # First LLM call
-        # ----------------------------------------------------
+            try:
 
-        response = llm_with_tools.invoke(
-            messages
-        )
-
-
-        # ----------------------------------------------------
-        # Check whether the model requested a tool
-        # ----------------------------------------------------
-
-        if hasattr(response, "tool_calls") and response.tool_calls:
-
-            tool_messages = [
-                response
-            ]
-
-
-            # ------------------------------------------------
-            # Execute requested tools
-            # ------------------------------------------------
-
-            for tool_call in response.tool_calls:
-
-                tool_name = tool_call["name"]
-
-                tool_args = tool_call.get(
-                    "args",
-                    {}
+                search_results = (
+                    search_tool.invoke(
+                        user_message
+                    )
                 )
 
 
-                if (
-                    tool_name == "duckduckgo_search"
-                    and search_tool is not None
-                ):
+            except Exception as search_error:
 
-                    try:
+                print(
+                    f"--- Search error: {search_error} ---"
+                )
 
-                        search_result = (
-                            search_tool.invoke(
-                                tool_args
-                            )
-                        )
-
-                    except Exception:
-
-                        # Some versions expect a string
-                        query = tool_args.get(
-                            "query",
-                            ""
-                        )
-
-                        search_result = (
-                            search_tool.invoke(
-                                query
-                            )
-                        )
-
-
-                    tool_messages.append(
-                        ToolMessage(
-                            content=str(
-                                search_result
-                            ),
-                            tool_call_id=tool_call["id"]
-                        )
-                    )
+                search_results = (
+                    "Web search was unavailable."
+                )
 
 
             # ------------------------------------------------
-            # Second LLM call with search results
+            # Send Search Results to Groq
             # ------------------------------------------------
 
-            final_messages = (
-                messages + tool_messages
+            search_prompt = HumanMessage(
+                content=(
+                    f"User question:\n"
+                    f"{user_message}\n\n"
+
+                    f"DuckDuckGo search results:\n"
+                    f"{search_results}\n\n"
+
+                    "Answer the user's question using "
+                    "the search results above.\n\n"
+
+                    "Instructions:\n"
+                    "- Give the most useful answer possible.\n"
+                    "- For current information such as "
+                    "sports scores, news, prices, weather, "
+                    "or schedules, rely on the search results.\n"
+                    "- Do not invent missing information.\n"
+                    "- If the search results are insufficient, "
+                    "say so honestly."
+                )
             )
 
 
-            final_response = llm.invoke(
-                final_messages
+            messages.append(
+                search_prompt
             )
 
 
-            answer = final_response.content
+            response = llm.invoke(
+                messages
+            )
 
+
+        # ====================================================
+        # NORMAL CHAT MODE
+        # ====================================================
 
         else:
 
-            answer = response.content
+            print(
+                "--- Using Groq without web search ---"
+            )
 
 
-        # ----------------------------------------------------
-        # Save conversation
-        # ----------------------------------------------------
+            messages.append(
+                HumanMessage(
+                    content=user_message
+                )
+            )
+
+
+            response = llm.invoke(
+                messages
+            )
+
+
+        # ====================================================
+        # Extract Response
+        # ====================================================
+
+        answer = response.content
+
+
+        if isinstance(
+            answer,
+            list
+        ):
+
+            answer = "\n".join(
+                str(item)
+                for item in answer
+            )
+
+
+        answer = str(answer)
+
+
+        # ====================================================
+        # Save History
+        # ====================================================
 
         session_state.history.add_user_message(
             user_message
@@ -447,20 +498,21 @@ def create_rag_chain(
 ):
 
     """
-    Creates a modern LCEL RAG chain.
+    Modern LCEL RAG pipeline:
 
-    User question
-        ↓
+    User Question
+          ↓
     FAISS Retriever
-        ↓
-    Relevant document chunks
-        ↓
-    Prompt
-        ↓
+          ↓
+    Relevant Documents
+          ↓
+    Context
+          ↓
     Groq
-        ↓
+          ↓
     Answer
     """
+
 
     retriever = vectorstore.as_retriever(
         search_kwargs={
@@ -469,21 +521,22 @@ def create_rag_chain(
     )
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # RAG Prompt
-    # --------------------------------------------------------
+    # ========================================================
 
     rag_prompt = ChatPromptTemplate.from_messages(
         [
+
             (
                 "system",
                 (
                     "You are Eureka, a helpful AI assistant.\n\n"
 
-                    "Answer the user's question using the "
-                    "provided document context.\n\n"
+                    "Answer the user's question using "
+                    "the provided document context.\n\n"
 
-                    "Important rules:\n"
+                    "Rules:\n"
 
                     "1. Use the uploaded document as "
                     "the primary source.\n"
@@ -507,13 +560,14 @@ def create_rag_chain(
                 "human",
                 "{input}"
             )
+
         ]
     )
 
 
-    # --------------------------------------------------------
-    # Format Retrieved Documents
-    # --------------------------------------------------------
+    # ========================================================
+    # Format Documents
+    # ========================================================
 
     def format_docs(
         docs
@@ -525,9 +579,9 @@ def create_rag_chain(
         )
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # LCEL RAG Chain
-    # --------------------------------------------------------
+    # ========================================================
 
     rag_chain = (
 
@@ -568,9 +622,9 @@ def upload_file():
     )
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # Check Embeddings
-    # --------------------------------------------------------
+    # ========================================================
 
     if embeddings is None:
 
@@ -583,9 +637,9 @@ def upload_file():
         ), 500
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # Check File
-    # --------------------------------------------------------
+    # ========================================================
 
     if "file" not in request.files:
 
@@ -608,9 +662,9 @@ def upload_file():
         ), 400
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # Save File
-    # --------------------------------------------------------
+    # ========================================================
 
     filename = secure_filename(
         file.filename
@@ -628,9 +682,9 @@ def upload_file():
 
     try:
 
-        # ----------------------------------------------------
-        # Select Document Loader
-        # ----------------------------------------------------
+        # ====================================================
+        # Select Loader
+        # ====================================================
 
         if filename.lower().endswith(
             ".pdf"
@@ -658,15 +712,15 @@ def upload_file():
                 {
                     "error": (
                         "Unsupported file type. "
-                        "Please upload a PDF or DOCX file."
+                        "Please upload PDF or DOCX."
                     )
                 }
             ), 400
 
 
-        # ----------------------------------------------------
-        # Load Document
-        # ----------------------------------------------------
+        # ====================================================
+        # Load Documents
+        # ====================================================
 
         docs = loader.load()
 
@@ -690,9 +744,9 @@ def upload_file():
         )
 
 
-        # ----------------------------------------------------
-        # Split Document
-        # ----------------------------------------------------
+        # ====================================================
+        # Split Documents
+        # ====================================================
 
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
@@ -724,9 +778,9 @@ def upload_file():
         )
 
 
-        # ----------------------------------------------------
+        # ====================================================
         # Create FAISS Vector Store
-        # ----------------------------------------------------
+        # ====================================================
 
         vectorstore = FAISS.from_documents(
             documents=splits,
@@ -739,9 +793,9 @@ def upload_file():
         )
 
 
-        # ----------------------------------------------------
+        # ====================================================
         # Create RAG Chain
-        # ----------------------------------------------------
+        # ====================================================
 
         session_state.rag_chain = (
             create_rag_chain(
@@ -750,16 +804,16 @@ def upload_file():
         )
 
 
-        # ----------------------------------------------------
-        # Clear Previous Chat History
-        # ----------------------------------------------------
+        # ====================================================
+        # Clear Previous History
+        # ====================================================
 
         session_state.history.clear()
 
 
-        # ----------------------------------------------------
-        # Remove Temporary File
-        # ----------------------------------------------------
+        # ====================================================
+        # Delete Temporary File
+        # ====================================================
 
         if os.path.exists(filepath):
 
@@ -866,12 +920,16 @@ def chat():
     )
 
 
+    # ========================================================
+    # Generate Response
+    # ========================================================
+
     def generate_response():
 
         try:
 
             # =================================================
-            # DOCUMENT / RAG MODE
+            # RAG MODE
             # =================================================
 
             if session_state.rag_chain is not None:
@@ -964,7 +1022,7 @@ def serve_frontend():
 
 
 # ============================================================
-# Run Server
+# Start Flask Server
 # ============================================================
 
 if __name__ == "__main__":
