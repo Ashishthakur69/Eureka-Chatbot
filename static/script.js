@@ -14,67 +14,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const themeIcon = document.getElementById("theme-icon");
     const themeText = document.getElementById("theme-text");
 
-    let uploadedDocuments = [];
+    let documents = [];
+
+    const MAX_DOCUMENTS = 5;
 
 
-    // Add a message to the chat.
-    function addMessage(sender, text) {
+    // Create a message element
 
-        const messageDiv = document.createElement("div");
-
-        messageDiv.className = `message ${sender}`;
-
-        const textElement = document.createElement("div");
-
-        textElement.className = "message-text";
-
-        if (sender === "bot") {
-            textElement.innerHTML = marked.parse(text);
-        } else {
-            textElement.textContent = text;
-        }
-
-        messageDiv.appendChild(textElement);
-
-        if (sender === "bot") {
-
-            const copyButton =
-                document.createElement("i");
-
-            copyButton.className =
-                "fas fa-copy copy-btn";
-
-            copyButton.title =
-                "Copy text";
-
-            messageDiv.appendChild(
-                copyButton
-            );
-        }
-
-        chatBox.appendChild(messageDiv);
-
-        chatBox.scrollTop =
-            chatBox.scrollHeight;
-    }
-
-
-    // Send a message to the backend.
-    async function sendMessage(message) {
-
-        if (!message.trim()) {
-            return;
-        }
-
-        addMessage("user", message);
-
-        userInput.value = "";
+    function createMessageDiv(sender) {
 
         const messageDiv =
             document.createElement("div");
 
         messageDiv.className =
-            "message bot";
+            `message ${sender}`;
 
         const textElement =
             document.createElement("div");
@@ -86,40 +39,115 @@ document.addEventListener("DOMContentLoaded", () => {
             textElement
         );
 
+        return messageDiv;
+    }
+
+
+    // Add a message to the chat
+
+    function addMessage(sender, text) {
+
+        const messageDiv =
+            createMessageDiv(sender);
+
+        const textElement =
+            messageDiv.querySelector(
+                ".message-text"
+            );
+
+        if (sender === "bot") {
+
+            textElement.innerHTML =
+                marked.parse(text);
+
+            const copyBtn =
+                document.createElement("i");
+
+            copyBtn.className =
+                "fas fa-copy copy-btn";
+
+            copyBtn.title =
+                "Copy text";
+
+            messageDiv.appendChild(
+                copyBtn
+            );
+
+        } else {
+
+            textElement.textContent =
+                text;
+        }
+
         chatBox.appendChild(
             messageDiv
         );
 
-        sendBtn.disabled = true;
-        userInput.disabled = true;
+        chatBox.scrollTop =
+            chatBox.scrollHeight;
+    }
+
+
+    // Send a chat message
+
+    async function sendMessage(message) {
+
+        if (!message.trim()) {
+            return;
+        }
+
+        addMessage(
+            "user",
+            message
+        );
+
+        userInput.value = "";
+
+        const botMessage =
+            createMessageDiv("bot");
+
+        const textElement =
+            botMessage.querySelector(
+                ".message-text"
+            );
+
+        chatBox.appendChild(
+            botMessage
+        );
+
+        chatBox.scrollTop =
+            chatBox.scrollHeight;
 
         try {
 
-            const response = await fetch(
-                "/chat",
-                {
-                    method: "POST",
+            const response =
+                await fetch(
+                    "/chat",
+                    {
+                        method: "POST",
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
 
-                    body: JSON.stringify({
-                        message: message
-                    })
-                }
-            );
+                        body: JSON.stringify({
+                            message: message
+                        })
+                    }
+                );
 
             if (!response.ok) {
+
                 throw new Error(
-                    `Server error: ${response.status}`
+                    `Server returned ${response.status}`
                 );
             }
 
             if (!response.body) {
+
                 throw new Error(
-                    "No response received."
+                    "No response body."
                 );
             }
 
@@ -142,12 +170,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     break;
                 }
 
-                fullText += decoder.decode(
-                    value,
-                    {
-                        stream: true
-                    }
-                );
+                fullText +=
+                    decoder.decode(
+                        value,
+                        {
+                            stream: true
+                        }
+                    );
 
                 textElement.innerHTML =
                     marked.parse(
@@ -159,20 +188,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             textElement.innerHTML =
-                marked.parse(fullText);
+                marked.parse(
+                    fullText
+                );
 
-            // Add copy button after response.
-            const copyButton =
-                document.createElement("i");
-
-            copyButton.className =
-                "fas fa-copy copy-btn";
-
-            copyButton.title =
-                "Copy text";
-
-            messageDiv.appendChild(
-                copyButton
+            addCopyButton(
+                botMessage
             );
 
         } catch (error) {
@@ -182,135 +203,251 @@ document.addEventListener("DOMContentLoaded", () => {
                 error
             );
 
-            textElement.textContent =
-                "❌ Could not connect to Eureka.";
-
-        } finally {
-
-            sendBtn.disabled = false;
-            userInput.disabled = false;
-
-            userInput.focus();
+            textElement.innerHTML =
+                marked.parse(
+                    "❌ Could not connect to Eureka."
+                );
         }
     }
 
 
-    // Update the document counter.
-    function updateDocumentCount() {
+    // Add copy button
 
-        const counter =
-            document.getElementById(
-                "document-count"
-            );
+    function addCopyButton(
+        messageDiv
+    ) {
 
-        if (!counter) {
+        if (
+            messageDiv.querySelector(
+                ".copy-btn"
+            )
+        ) {
             return;
         }
 
-        counter.textContent =
-            `${uploadedDocuments.length} / 5`;
+        const copyBtn =
+            document.createElement("i");
+
+        copyBtn.className =
+            "fas fa-copy copy-btn";
+
+        copyBtn.title =
+            "Copy text";
+
+        messageDiv.appendChild(
+            copyBtn
+        );
     }
 
 
-    // Display all uploaded documents.
+    // Update document counter
+
+    function updateDocumentCount() {
+
+        const count =
+            documents.length;
+
+        const counter =
+            document.querySelector(
+                ".document-count"
+            );
+
+        if (counter) {
+
+            counter.textContent =
+                `${count} / ${MAX_DOCUMENTS}`;
+        }
+    }
+
+
+    // Show empty document message
+
+    function showEmptyMessage() {
+
+        const existingItems =
+            fileList.querySelectorAll(
+                ".file-item"
+            );
+
+        existingItems.forEach(
+            item => item.remove()
+        );
+
+        let noFiles =
+            fileList.querySelector(
+                ".no-files"
+            );
+
+        if (!noFiles) {
+
+            noFiles =
+                document.createElement("p");
+
+            noFiles.className =
+                "no-files";
+
+            fileList.appendChild(
+                noFiles
+            );
+        }
+
+        noFiles.textContent =
+            "📪 No documents uploaded yet.";
+
+        noFiles.style.display =
+            "block";
+    }
+
+
+    // Hide empty document message
+
+    function hideEmptyMessage() {
+
+        const noFiles =
+            fileList.querySelector(
+                ".no-files"
+            );
+
+        if (noFiles) {
+
+            noFiles.style.display =
+                "none";
+        }
+    }
+
+
+    // Create document row
+
+    function createDocumentElement(
+        documentData
+    ) {
+
+        const fileItem =
+            document.createElement("div");
+
+        fileItem.className =
+            "file-item";
+
+        fileItem.dataset.documentId =
+            documentData.document_id;
+
+        const info =
+            document.createElement("div");
+
+        info.className =
+            "file-item-info";
+
+        const fileIcon =
+            document.createElement("i");
+
+        fileIcon.className =
+            "fas fa-file-pdf";
+
+        if (
+            documentData.filename
+                .toLowerCase()
+                .endsWith(".docx")
+        ) {
+
+            fileIcon.className =
+                "fas fa-file-word";
+        }
+
+        const fileName =
+            document.createElement("span");
+
+        fileName.className =
+            "file-name";
+
+        fileName.textContent =
+            documentData.filename;
+
+        fileName.title =
+            documentData.filename;
+
+        info.appendChild(
+            fileIcon
+        );
+
+        info.appendChild(
+            fileName
+        );
+
+
+        const status =
+            document.createElement("span");
+
+        status.className =
+            "file-status";
+
+        status.textContent =
+            "Ready ✓";
+
+
+        const deleteButton =
+            document.createElement("button");
+
+        deleteButton.className =
+            "delete-btn";
+
+        deleteButton.type =
+            "button";
+
+        deleteButton.title =
+            "Delete document";
+
+        deleteButton.dataset.documentId =
+            documentData.document_id;
+
+        deleteButton.innerHTML =
+            '<i class="fas fa-trash"></i>';
+
+
+        fileItem.appendChild(
+            info
+        );
+
+        fileItem.appendChild(
+            status
+        );
+
+        fileItem.appendChild(
+            deleteButton
+        );
+
+        return fileItem;
+    }
+
+
+    // Render all documents
+
     function renderDocuments() {
 
         fileList.innerHTML = "";
 
-        if (uploadedDocuments.length === 0) {
+        if (
+            documents.length === 0
+        ) {
 
-            const emptyMessage =
-                document.createElement("p");
-
-            emptyMessage.className =
-                "no-files";
-
-            emptyMessage.textContent =
-                "📪 No documents uploaded yet.";
-
-            fileList.appendChild(
-                emptyMessage
-            );
+            showEmptyMessage();
 
             updateDocumentCount();
 
             return;
         }
 
+        hideEmptyMessage();
 
-        uploadedDocuments.forEach(
-            (filename) => {
+        documents.forEach(
+            documentData => {
 
-                const fileItem =
-                    document.createElement("div");
-
-                fileItem.className =
-                    "file-item";
-
-
-                const fileInfo =
-                    document.createElement("div");
-
-                fileInfo.className =
-                    "file-item-info";
-
-
-                const fileIcon =
-                    document.createElement("i");
-
-                fileIcon.className =
-                    "fas fa-file-alt";
-
-
-                const fileName =
-                    document.createElement("span");
-
-                fileName.className =
-                    "file-name";
-
-                fileName.textContent =
-                    filename;
-
-
-                fileInfo.appendChild(
-                    fileIcon
-                );
-
-                fileInfo.appendChild(
-                    fileName
-                );
-
-
-                // Delete button.
-                const deleteButton =
-                    document.createElement("button");
-
-                deleteButton.type =
-                    "button";
-
-                deleteButton.className =
-                    "delete-btn";
-
-                deleteButton.title =
-                    `Delete ${filename}`;
-
-                deleteButton.dataset.filename =
-                    filename;
-
-                deleteButton.innerHTML =
-                    '<i class="fas fa-trash"></i>';
-
-
-                fileItem.appendChild(
-                    fileInfo
-                );
-
-                fileItem.appendChild(
-                    deleteButton
-                );
+                const element =
+                    createDocumentElement(
+                        documentData
+                    );
 
                 fileList.appendChild(
-                    fileItem
+                    element
                 );
             }
         );
@@ -319,7 +456,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    // Load documents from the backend.
+    // Load existing documents
+
     async function loadDocuments() {
 
         try {
@@ -330,13 +468,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 );
 
             if (!response.ok) {
-                return;
+
+                throw new Error(
+                    "Could not load documents."
+                );
             }
 
             const data =
                 await response.json();
 
-            uploadedDocuments =
+            documents =
                 data.documents || [];
 
             renderDocuments();
@@ -344,14 +485,72 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
 
             console.error(
-                "Document loading error:",
+                "Loading documents failed:",
                 error
             );
+
+            documents = [];
+
+            renderDocuments();
         }
     }
 
 
-    // Upload a document.
+    // Handle selected files
+
+    function handleFiles(files) {
+
+        if (!files || files.length === 0) {
+            return;
+        }
+
+        if (
+            documents.length >=
+            MAX_DOCUMENTS
+        ) {
+
+            alert(
+                "You can upload up to 5 documents."
+            );
+
+            return;
+        }
+
+        if (files.length > 1) {
+
+            alert(
+                "Please upload one document at a time."
+            );
+
+            return;
+        }
+
+        const file = files[0];
+
+        const allowedTypes = [
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ];
+
+        if (
+            !allowedTypes.includes(
+                file.type
+            )
+        ) {
+
+            alert(
+                "Unsupported file type. Please upload a PDF or DOCX file."
+            );
+
+            return;
+        }
+
+        uploadFile(file);
+    }
+
+
+    // Upload document
+
     async function uploadFile(file) {
 
         const temporaryItem =
@@ -360,57 +559,35 @@ document.addEventListener("DOMContentLoaded", () => {
         temporaryItem.className =
             "file-item";
 
+        temporaryItem.innerHTML = `
+            <div class="file-item-info">
+                <i class="fas fa-file"></i>
+                <span class="file-name" title="${escapeHtml(file.name)}">
+                    ${escapeHtml(file.name)}
+                </span>
+            </div>
 
-        const fileInfo =
-            document.createElement("div");
+            <span class="file-status processing">
+                Processing...
+            </span>
 
-        fileInfo.className =
-            "file-item-info";
+            <button
+                class="delete-btn"
+                type="button"
+                disabled
+                title="Processing"
+            >
+                <i class="fas fa-spinner fa-spin"></i>
+            </button>
+        `;
 
-
-        const icon =
-            document.createElement("i");
-
-        icon.className =
-            "fas fa-file-alt";
-
-
-        const name =
-            document.createElement("span");
-
-        name.className =
-            "file-name";
-
-        name.textContent =
-            file.name;
-
-
-        fileInfo.appendChild(icon);
-        fileInfo.appendChild(name);
-
-
-        const status =
-            document.createElement("span");
-
-        status.className =
-            "file-status processing";
-
-        status.textContent =
-            "Processing...";
-
-
-        temporaryItem.appendChild(
-            fileInfo
-        );
-
-        temporaryItem.appendChild(
-            status
-        );
+        hideEmptyMessage();
 
         fileList.appendChild(
             temporaryItem
         );
 
+        updateDocumentCount();
 
         const formData =
             new FormData();
@@ -419,7 +596,6 @@ document.addEventListener("DOMContentLoaded", () => {
             "file",
             file
         );
-
 
         try {
 
@@ -435,8 +611,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const data =
                 await response.json();
 
-
-            if (!response.ok || !data.success) {
+            if (
+                !response.ok ||
+                !data.success
+            ) {
 
                 throw new Error(
                     data.error ||
@@ -444,12 +622,27 @@ document.addEventListener("DOMContentLoaded", () => {
                 );
             }
 
+            temporaryItem.remove();
 
-            uploadedDocuments =
-                data.documents || [];
+            documents.push({
+
+                filename:
+                    data.filename,
+
+                document_id:
+                    data.document_id,
+
+                chunks:
+                    data.chunks
+
+            });
 
             renderDocuments();
 
+            console.log(
+                "Document uploaded:",
+                data
+            );
 
         } catch (error) {
 
@@ -463,101 +656,44 @@ document.addEventListener("DOMContentLoaded", () => {
             renderDocuments();
 
             alert(
-                error.message ||
-                "Failed to upload document."
+                `Upload failed: ${error.message}`
             );
         }
     }
 
 
-    // Handle selected files.
-    function handleFiles(files) {
+    // Delete one document
 
-        if (!files || files.length === 0) {
-            return;
-        }
+    async function deleteDocument(
+        documentId,
+        button
+    ) {
 
-
-        const availableSlots =
-            5 - uploadedDocuments.length;
-
-
-        if (availableSlots <= 0) {
-
-            alert(
-                "You can upload a maximum of 5 documents."
+        const documentData =
+            documents.find(
+                doc =>
+                    doc.document_id ===
+                    documentId
             );
 
+        if (!documentData) {
             return;
         }
-
-
-        const selectedFiles =
-            Array.from(files).slice(
-                0,
-                availableSlots
-            );
-
-
-        selectedFiles.forEach(
-            (file) => {
-
-                const allowedTypes = [
-                    "application/pdf",
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                ];
-
-
-                if (
-                    !allowedTypes.includes(
-                        file.type
-                    )
-                ) {
-
-                    alert(
-                        `${file.name} is not supported. Please upload a PDF or DOCX file.`
-                    );
-
-                    return;
-                }
-
-
-                if (
-                    uploadedDocuments.includes(
-                        file.name
-                    )
-                ) {
-
-                    alert(
-                        `${file.name} is already uploaded.`
-                    );
-
-                    return;
-                }
-
-
-                uploadFile(file);
-            }
-        );
-
-
-        fileInput.value = "";
-    }
-
-
-    // Delete one document.
-    async function deleteDocument(filename) {
 
         const confirmed =
             confirm(
-                `Delete "${filename}"?`
+                `Delete "${documentData.filename}"?`
             );
-
 
         if (!confirmed) {
             return;
         }
 
+        button.disabled =
+            true;
+
+        button.innerHTML =
+            '<i class="fas fa-spinner fa-spin"></i>';
 
         try {
 
@@ -573,17 +709,19 @@ document.addEventListener("DOMContentLoaded", () => {
                         },
 
                         body: JSON.stringify({
-                            filename: filename
+                            document_id:
+                                documentId
                         })
                     }
                 );
 
-
             const data =
                 await response.json();
 
-
-            if (!response.ok || !data.success) {
+            if (
+                !response.ok ||
+                !data.success
+            ) {
 
                 throw new Error(
                     data.error ||
@@ -591,13 +729,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 );
             }
 
-
-            uploadedDocuments =
-                data.documents || [];
-
+            documents =
+                documents.filter(
+                    doc =>
+                        doc.document_id !==
+                        documentId
+                );
 
             renderDocuments();
-
 
         } catch (error) {
 
@@ -606,25 +745,54 @@ document.addEventListener("DOMContentLoaded", () => {
                 error
             );
 
+            button.disabled =
+                false;
+
+            button.innerHTML =
+                '<i class="fas fa-trash"></i>';
+
             alert(
-                error.message ||
-                "Failed to delete document."
+                `Could not delete document: ${error.message}`
             );
         }
     }
 
 
-    // Upload zone click.
+    // Escape HTML used for temporary UI
+
+    function escapeHtml(
+        text
+    ) {
+
+        const div =
+            document.createElement(
+                "div"
+            );
+
+        div.textContent =
+            text;
+
+        return div.innerHTML;
+    }
+
+
+    // Upload zone click
+
     uploadZone.addEventListener(
         "click",
-        () => fileInput.click()
+        () => {
+
+            fileInput.click();
+
+        }
     );
 
 
-    // Drag over.
+    // Drag over
+
     uploadZone.addEventListener(
         "dragover",
-        (event) => {
+        event => {
 
             event.preventDefault();
 
@@ -635,7 +803,8 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-    // Drag leave.
+    // Drag leave
+
     uploadZone.addEventListener(
         "dragleave",
         () => {
@@ -647,10 +816,11 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-    // Drop files.
+    // Drop
+
     uploadZone.addEventListener(
         "drop",
-        (event) => {
+        event => {
 
             event.preventDefault();
 
@@ -665,7 +835,8 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-    // File picker.
+    // File picker
+
     fileInput.addEventListener(
         "change",
         () => {
@@ -673,11 +844,14 @@ document.addEventListener("DOMContentLoaded", () => {
             handleFiles(
                 fileInput.files
             );
+
+            fileInput.value = "";
         }
     );
 
 
-    // Send message.
+    // Send button
+
     sendBtn.addEventListener(
         "click",
         () => {
@@ -689,10 +863,11 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-    // Enter to send.
+    // Enter key
+
     userInput.addEventListener(
         "keydown",
-        (event) => {
+        event => {
 
             if (
                 event.key === "Enter" &&
@@ -709,67 +884,85 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-    // Handle delete and copy buttons.
-    document.addEventListener(
+    // Document delete buttons
+
+    fileList.addEventListener(
         "click",
-        async (event) => {
+        event => {
 
             const deleteButton =
                 event.target.closest(
                     ".delete-btn"
                 );
 
-
-            if (deleteButton) {
-
-                const filename =
-                    deleteButton.dataset.filename;
-
-
-                if (filename) {
-
-                    await deleteDocument(
-                        filename
-                    );
-                }
-
+            if (!deleteButton) {
                 return;
             }
 
+            if (
+                deleteButton.disabled
+            ) {
+                return;
+            }
+
+            const documentId =
+                deleteButton.dataset.documentId;
+
+            if (!documentId) {
+                return;
+            }
+
+            deleteDocument(
+                documentId,
+                deleteButton
+            );
+        }
+    );
+
+
+    // Copy bot response
+
+    document.addEventListener(
+        "click",
+        event => {
 
             const copyButton =
                 event.target.closest(
                     ".copy-btn"
                 );
 
+            if (!copyButton) {
+                return;
+            }
 
-            if (copyButton) {
+            const message =
+                copyButton.closest(
+                    ".message"
+                );
 
-                const message =
-                    copyButton
-                        .closest(".message")
-                        ?.querySelector(
-                            ".message-text"
-                        );
+            if (!message) {
+                return;
+            }
 
+            const messageText =
+                message.querySelector(
+                    ".message-text"
+                );
 
-                if (!message) {
-                    return;
-                }
+            if (!messageText) {
+                return;
+            }
 
-
-                try {
-
-                    await navigator.clipboard.writeText(
-                        message.innerText
-                    );
-
+            navigator.clipboard
+                .writeText(
+                    messageText.innerText
+                )
+                .then(() => {
 
                     copyButton.classList.replace(
                         "fa-copy",
                         "fa-check"
                     );
-
 
                     setTimeout(
                         () => {
@@ -782,20 +975,22 @@ document.addEventListener("DOMContentLoaded", () => {
                         },
                         1500
                     );
+                })
+                .catch(
+                    error => {
 
-                } catch (error) {
-
-                    console.error(
-                        "Copy failed:",
-                        error
-                    );
-                }
-            }
+                        console.error(
+                            "Copy failed:",
+                            error
+                        );
+                    }
+                );
         }
     );
 
 
-    // Theme switch.
+    // Theme toggle
+
     themeToggle.addEventListener(
         "change",
         () => {
@@ -804,8 +999,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 "light-theme"
             );
 
-
-            if (themeToggle.checked) {
+            if (
+                themeToggle.checked
+            ) {
 
                 themeIcon.className =
                     "fas fa-moon";
@@ -825,14 +1021,16 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-    // Initial message.
+    // Initial Eureka message
+
     addMessage(
         "bot",
-        "Hello! I'm **Eureka** 💡. Upload documents or ask me anything."
+        "Hello! I'm **Eureka** 💡. Upload a document or ask me anything."
     );
 
 
-    // Load existing documents.
+    // Load documents already uploaded
+
     loadDocuments();
 
 });
