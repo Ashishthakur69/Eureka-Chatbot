@@ -3,7 +3,6 @@ from flask_cors import CORS
 
 import os
 import traceback
-from collections import defaultdict
 
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
@@ -21,43 +20,22 @@ from langchain_huggingface import HuggingFaceEmbeddings
 
 from langchain_community.vectorstores import FAISS
 
-from langchain_core.prompts import (
-    ChatPromptTemplate,
-    MessagesPlaceholder
-)
-
 from langchain_core.messages import (
-    BaseMessage,
     HumanMessage,
-    AIMessage
+    AIMessage,
+    SystemMessage
 )
 
 from langchain_community.chat_message_histories import (
     ChatMessageHistory
 )
 
-from langchain_community.tools import DuckDuckGoSearchRun
-
-from langchain_core.runnables.history import (
-    RunnableWithMessageHistory
+from langchain_community.tools import (
+    DuckDuckGoSearchRun
 )
-
-from langchain.agents import (
-    AgentExecutor,
-    create_tool_calling_agent
-)
-
-from pydantic import ConfigDict
 
 
 load_dotenv()
-
-
-# Create upload directory
-
-UPLOAD_FOLDER = "uploads"
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 # Flask setup
@@ -71,12 +49,23 @@ app = Flask(
 CORS(app)
 
 
-# File upload limits
+# Upload settings
+
+UPLOAD_FOLDER = "uploads"
+
+os.makedirs(
+    UPLOAD_FOLDER,
+    exist_ok=True
+)
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = (
+    25 * 1024 * 1024
+)
 
+
+# Supported files
 
 ALLOWED_EXTENSIONS = {
     ".pdf",
@@ -87,11 +76,14 @@ ALLOWED_EXTENSIONS = {
 MAX_DOCUMENTS = 5
 
 
-# Groq setup
+# Groq API
 
-groq_api_key = os.getenv("GROQ_API_KEY")
+groq_api_key = os.getenv(
+    "GROQ_API_KEY"
+)
 
 if not groq_api_key:
+
     raise RuntimeError(
         "GROQ_API_KEY is not configured."
     )
@@ -106,137 +98,176 @@ llm = ChatGroq(
 print("Groq model loaded.")
 
 
-# Web search tool
+# DuckDuckGo search
 
 try:
+
     search_tool = DuckDuckGoSearchRun()
 
-    print("DuckDuckGo search ready.")
+    print(
+        "DuckDuckGo search ready."
+    )
 
 except Exception as e:
+
     search_tool = None
 
     print(
-        f"Warning: DuckDuckGo search could not be loaded: {e}"
+        f"DuckDuckGo search unavailable: {e}"
     )
 
 
 # Free embedding model
 
-print("Loading embedding model...")
+print(
+    "Loading embedding model..."
+)
 
 try:
 
     embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name=(
+            "sentence-transformers/"
+            "all-MiniLM-L6-v2"
+        )
     )
 
-    print("Embedding model loaded.")
+    print(
+        "Embedding model loaded."
+    )
 
 except Exception as e:
 
     embeddings = None
 
     print(
-        f"Embedding model failed to load: {e}"
+        f"Embedding model failed: {e}"
     )
 
 
-# Splitter used for uploaded documents
+# Text splitting
 
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1000,
-    chunk_overlap=200
+text_splitter = (
+    RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200
+    )
 )
 
 
-# Store application state
+# Session state
 
 class SessionState:
 
     def __init__(self):
 
-        self.history = ChatMessageHistory()
+        self.history = (
+            ChatMessageHistory()
+        )
 
         self.vectorstore = None
 
         self.documents = {}
 
-        self.document_chunks = defaultdict(list)
+        self.document_chunks = {}
 
 
 store = {}
 
 
-def get_session_state(session_id):
+def get_session_state(
+    session_id
+):
 
     if session_id not in store:
 
-        store[session_id] = SessionState()
+        store[session_id] = (
+            SessionState()
+        )
 
     return store[session_id]
 
 
-# Keep only the latest messages
+# Keep conversation history small
 
-def trim_history(history, max_messages=10):
+def trim_history(
+    history,
+    max_messages=10
+):
 
-    if len(history.messages) > max_messages:
+    if len(
+        history.messages
+    ) > max_messages:
 
-        history.messages = history.messages[
-            -max_messages:
-        ]
+        history.messages = (
+            history.messages[
+                -max_messages:
+            ]
+        )
 
 
-# Check file extension
+# Check file type
 
-def allowed_file(filename):
+def allowed_file(
+    filename
+):
 
     extension = os.path.splitext(
         filename
     )[1].lower()
 
-    return extension in ALLOWED_EXTENSIONS
+    return (
+        extension
+        in ALLOWED_EXTENSIONS
+    )
 
 
-# Create a clean document ID
+# Create document ID
 
-def create_document_id(filename):
+def create_document_id(
+    filename
+):
 
-    base_name = os.path.splitext(
+    name = os.path.splitext(
         filename
     )[0]
 
     safe_name = secure_filename(
-        base_name
+        name
     )
 
-    return safe_name
+    return safe_name.lower()
 
 
-# Build FAISS index from all currently uploaded documents
+# Rebuild FAISS index
 
-def rebuild_vectorstore(session_state):
+def rebuild_vectorstore(
+    session_state
+):
 
     if embeddings is None:
 
         raise RuntimeError(
-            "Embedding model is not available."
+            "Embedding model is unavailable."
         )
 
     all_chunks = []
 
-    for document_id in session_state.document_chunks:
+    for chunks in (
+        session_state
+        .document_chunks
+        .values()
+    ):
 
         all_chunks.extend(
-            session_state.document_chunks[
-                document_id
-            ]
+            chunks
         )
 
     if not all_chunks:
 
-        session_state.vectorstore = None
+        session_state.vectorstore = (
+            None
+        )
 
         return
 
@@ -248,11 +279,16 @@ def rebuild_vectorstore(session_state):
     )
 
 
-# Format source information
+# Format source citation
 
-def format_source(document):
+def format_source(
+    document
+):
 
-    metadata = document.metadata or {}
+    metadata = (
+        document.metadata
+        or {}
+    )
 
     source = metadata.get(
         "source",
@@ -267,10 +303,13 @@ def format_source(document):
 
         try:
 
-            page_number = int(page) + 1
+            page_number = (
+                int(page) + 1
+            )
 
             return (
-                f"{source} — Page {page_number}"
+                f"{source} — "
+                f"Page {page_number}"
             )
 
         except Exception:
@@ -280,49 +319,56 @@ def format_source(document):
     return source
 
 
-# Build citations from retrieved documents
+# Create citation section
 
-def build_citations(documents):
+def build_citations(
+    documents
+):
 
-    sources = []
+    citations = []
 
     seen = set()
 
     for document in documents:
 
-        source_text = format_source(
+        source = format_source(
             document
         )
 
-        if source_text in seen:
+        if source in seen:
+
             continue
 
-        seen.add(source_text)
+        seen.add(source)
 
-        sources.append(
-            source_text
+        citations.append(
+            source
         )
 
-    if not sources:
+    if not citations:
 
         return ""
 
-    citation_text = "\n\n**Sources**\n"
+    result = (
+        "\n\n**Sources**\n"
+    )
 
-    for source in sources:
+    for source in citations:
 
-        citation_text += (
+        result += (
             f"- 📄 {source}\n"
         )
 
-    return citation_text
+    return result
 
 
-# Create document context for the LLM
+# Build RAG context
 
-def build_context(documents):
+def build_context(
+    documents
+):
 
-    context_parts = []
+    parts = []
 
     for index, document in enumerate(
         documents,
@@ -333,169 +379,327 @@ def build_context(documents):
             document
         )
 
-        content = document.page_content.strip()
+        content = (
+            document
+            .page_content
+            .strip()
+        )
 
-        context_parts.append(
+        parts.append(
             f"[Source {index}: {source}]\n"
             f"{content}"
         )
 
     return "\n\n".join(
-        context_parts
+        parts
     )
 
 
-# RAG prompt
+# Decide whether web search is useful
 
-rag_prompt = ChatPromptTemplate.from_messages(
-    [
+def needs_web_search(
+    question
+):
 
-        (
-            "system",
-            """
-You are Eureka, an AI assistant with document
-question-answering capabilities.
+    question_lower = (
+        question
+        .lower()
+        .strip()
+    )
 
-The user has uploaded one or more documents.
+    current_keywords = [
 
-Answer the user's question using the retrieved
-document context below.
+        "today",
+        "current",
+        "latest",
+        "recent",
+        "right now",
+        "live",
+        "breaking",
+        "news",
+        "score",
+        "weather",
+        "forecast",
+        "stock price",
+        "share price",
+        "market today",
+        "this week",
+        "this month",
+        "2026"
 
-Important rules:
+    ]
 
-1. Use the provided document context as the
-   primary source of truth.
+    return any(
+        keyword
+        in question_lower
+        for keyword
+        in current_keywords
+    )
 
-2. Do not invent information that is not supported
-   by the retrieved context.
 
-3. If the answer cannot be found in the retrieved
-   context, clearly say that the information was
-   not found in the uploaded documents.
+# RAG system prompt
+
+RAG_SYSTEM_PROMPT = """
+You are Eureka, a helpful AI assistant.
+
+The user has uploaded documents and is asking a
+question about them.
+
+Use the retrieved document context as the primary
+source of truth.
+
+Rules:
+
+1. Answer only from information supported by the
+   retrieved document context.
+
+2. Do not invent facts that are not present in the
+   retrieved context.
+
+3. If the answer cannot be found in the documents,
+   clearly say that you could not find the answer
+   in the uploaded documents.
 
 4. Give a direct and useful answer.
 
-5. Do not mention internal retrieval, embeddings,
-   FAISS, vector databases, or prompts.
+5. Do not mention FAISS, embeddings, vector
+   databases, retrieval pipelines, or prompts.
 
 6. Do not create a Sources section yourself.
-   The application will add source citations.
+   The application will add citations automatically.
 
 Retrieved document context:
 
 {context}
-""",
-        ),
-
-        (
-            "human",
-            "{question}"
-        )
-
-    ]
-)
+"""
 
 
-# Normal Eureka agent
+# Normal chat system prompt
 
-agent_prompt = ChatPromptTemplate.from_messages(
-    [
-
-        (
-            "system",
-            """
+NORMAL_SYSTEM_PROMPT = """
 You are Eureka, a helpful and knowledgeable AI
 assistant.
 
-Answer general questions using your own knowledge.
+Answer questions clearly and naturally.
 
-You have access to one optional web search tool.
+Use your own knowledge for general questions.
 
-Use web search when the user asks for information
-that is current, changing, or time-sensitive.
+If web search results are provided, use them for
+current or time-sensitive information.
 
-Examples include:
+Do not pretend information is current when it has
+not been verified.
 
-- Current events
-- Sports scores
-- Weather
-- Stock prices
-- Recent news
-- Current technology information
-
-For general questions, answer directly.
-
-Be concise, accurate, and honest when information
-is uncertain.
+Be honest when information is uncertain.
 """
+
+
+# Ask Groq about documents
+
+def answer_from_documents(
+    question,
+    session_state
+):
+
+    if (
+        session_state.vectorstore
+        is None
+    ):
+
+        return (
+            "No documents are currently "
+            "available."
+        )
+
+    retrieved_documents = (
+        session_state
+        .vectorstore
+        .similarity_search(
+            question,
+            k=5
+        )
+    )
+
+    if not retrieved_documents:
+
+        return (
+            "I couldn't find relevant "
+            "information in the uploaded "
+            "documents."
+        )
+
+    context = build_context(
+        retrieved_documents
+    )
+
+    system_message = (
+        RAG_SYSTEM_PROMPT.format(
+            context=context
+        )
+    )
+
+    messages = [
+
+        SystemMessage(
+            content=system_message
         ),
 
-        MessagesPlaceholder(
-            variable_name="history"
-        ),
-
-        (
-            "human",
-            "{input}"
-        ),
-
-        MessagesPlaceholder(
-            variable_name="agent_scratchpad"
+        HumanMessage(
+            content=question
         )
 
     ]
-)
 
+    response = llm.invoke(
+        messages
+    )
 
-# Create normal agent only when search is available
+    answer = response.content
 
-agent_with_history = None
+    if isinstance(
+        answer,
+        list
+    ):
 
-
-if search_tool is not None:
-
-    try:
-
-        tools = [
-            search_tool
-        ]
-
-        agent = create_tool_calling_agent(
-            llm,
-            tools,
-            agent_prompt
+        answer = "\n".join(
+            str(item)
+            for item in answer
         )
 
-        agent_executor = AgentExecutor(
-            agent=agent,
-            tools=tools,
-            verbose=False
+    answer = str(
+        answer
+    ).strip()
+
+    citations = (
+        build_citations(
+            retrieved_documents
+        )
+    )
+
+    return (
+        answer
+        + citations
+    )
+
+
+# Normal Eureka chat
+
+def answer_normal_question(
+    question,
+    session_state
+):
+
+    messages = [
+
+        SystemMessage(
+            content=NORMAL_SYSTEM_PROMPT
         )
 
-        agent_with_history = (
-            RunnableWithMessageHistory(
-                agent_executor,
-                lambda session_id:
-                    get_session_state(
-                        session_id
-                    ).history,
-                input_messages_key="input",
-                history_messages_key="history"
+    ]
+
+    # Add recent conversation
+
+    messages.extend(
+        session_state
+        .history
+        .messages
+    )
+
+    search_results = None
+
+    # Search only when the question
+    # appears to require current information
+
+    if (
+        needs_web_search(question)
+        and search_tool is not None
+    ):
+
+        try:
+
+            print(
+                f"Searching web for: {question}"
             )
+
+            search_results = (
+                search_tool.invoke(
+                    question
+                )
+            )
+
+        except Exception as e:
+
+            print(
+                f"Web search failed: {e}"
+            )
+
+            search_results = None
+
+    # Add user question
+
+    if search_results:
+
+        user_content = (
+            f"User question:\n"
+            f"{question}\n\n"
+            f"Web search results:\n"
+            f"{search_results}\n\n"
+            "Use the search results when "
+            "they are relevant to the question."
         )
 
-        print("Eureka agent ready.")
+    else:
 
-    except Exception as e:
+        user_content = question
 
-        print(
-            f"Agent setup failed: {e}"
+    messages.append(
+        HumanMessage(
+            content=user_content
+        )
+    )
+
+    response = llm.invoke(
+        messages
+    )
+
+    answer = response.content
+
+    if isinstance(
+        answer,
+        list
+    ):
+
+        answer = "\n".join(
+            str(item)
+            for item in answer
         )
 
-        agent_with_history = None
+    answer = str(
+        answer
+    ).strip()
+
+    # Save conversation
+
+    session_state.history.add_message(
+        HumanMessage(
+            content=question
+        )
+    )
+
+    session_state.history.add_message(
+        AIMessage(
+            content=answer
+        )
+    )
+
+    trim_history(
+        session_state.history
+    )
+
+    return answer
 
 
-# Upload document
+# Upload endpoint
 
 @app.route(
     "/upload",
@@ -503,10 +707,10 @@ if search_tool is not None:
 )
 def upload_file():
 
-    session_id = "user_session_123"
-
-    session_state = get_session_state(
-        session_id
+    session_state = (
+        get_session_state(
+            "user_session_123"
+        )
     )
 
     if embeddings is None:
@@ -514,7 +718,7 @@ def upload_file():
         return jsonify(
             {
                 "error":
-                "Embedding model is not available."
+                "Embedding model is unavailable."
             }
         ), 500
 
@@ -527,7 +731,9 @@ def upload_file():
             }
         ), 400
 
-    file = request.files["file"]
+    file = request.files[
+        "file"
+    ]
 
     if not file.filename:
 
@@ -538,7 +744,12 @@ def upload_file():
             }
         ), 400
 
-    if len(session_state.documents) >= MAX_DOCUMENTS:
+    if (
+        len(
+            session_state.documents
+        )
+        >= MAX_DOCUMENTS
+    ):
 
         return jsonify(
             {
@@ -551,7 +762,9 @@ def upload_file():
         file.filename
     )
 
-    if not allowed_file(filename):
+    if not allowed_file(
+        filename
+    ):
 
         return jsonify(
             {
@@ -560,11 +773,16 @@ def upload_file():
             }
         ), 400
 
-    document_id = create_document_id(
-        filename
+    document_id = (
+        create_document_id(
+            filename
+        )
     )
 
-    if document_id in session_state.documents:
+    if (
+        document_id
+        in session_state.documents
+    ):
 
         return jsonify(
             {
@@ -574,27 +792,30 @@ def upload_file():
         ), 400
 
     filepath = os.path.join(
-        app.config["UPLOAD_FOLDER"],
+        app.config[
+            "UPLOAD_FOLDER"
+        ],
         filename
     )
 
     try:
 
-        file.save(filepath)
+        file.save(
+            filepath
+        )
 
-        extension = os.path.splitext(
-            filename
-        )[1].lower()
-
-        # Load PDF
+        extension = (
+            os.path.splitext(
+                filename
+            )[1]
+            .lower()
+        )
 
         if extension == ".pdf":
 
             loader = PyPDFLoader(
                 filepath
             )
-
-        # Load DOCX
 
         elif extension == ".docx":
 
@@ -613,10 +834,10 @@ def upload_file():
         if not documents:
 
             raise ValueError(
-                "The document contains no readable text."
+                "No readable text was found."
             )
 
-        # Add useful metadata
+        # Store document metadata
 
         for document in documents:
 
@@ -628,10 +849,13 @@ def upload_file():
                 "document_id"
             ] = document_id
 
-        # Split document
+        # Split into chunks
 
-        chunks = text_splitter.split_documents(
-            documents
+        chunks = (
+            text_splitter
+            .split_documents(
+                documents
+            )
         )
 
         if not chunks:
@@ -649,36 +873,50 @@ def upload_file():
         session_state.documents[
             document_id
         ] = {
-            "filename": filename,
-            "document_id": document_id,
-            "chunks": len(chunks)
+
+            "filename":
+                filename,
+
+            "document_id":
+                document_id,
+
+            "chunks":
+                len(chunks)
+
         }
 
-        # Rebuild FAISS index
+        # Rebuild FAISS
 
         rebuild_vectorstore(
             session_state
         )
 
-        # Clear old conversation
+        # Reset previous conversation
 
         session_state.history.clear()
 
         return jsonify(
             {
                 "success": True,
+
                 "message":
-                    f"'{filename}' processed successfully.",
+                    f"'{filename}' "
+                    "processed successfully.",
+
                 "filename":
                     filename,
+
                 "document_id":
                     document_id,
+
                 "chunks":
                     len(chunks),
+
                 "document_count":
                     len(
                         session_state.documents
                     ),
+
                 "max_documents":
                     MAX_DOCUMENTS
             }
@@ -717,11 +955,15 @@ def upload_file():
 
     finally:
 
-        if os.path.exists(filepath):
+        if os.path.exists(
+            filepath
+        ):
 
             try:
 
-                os.remove(filepath)
+                os.remove(
+                    filepath
+                )
 
             except Exception:
 
@@ -736,24 +978,36 @@ def upload_file():
 )
 def get_documents():
 
-    session_state = get_session_state(
-        "user_session_123"
+    session_state = (
+        get_session_state(
+            "user_session_123"
+        )
     )
 
     documents = []
 
-    for document in session_state.documents.values():
+    for document in (
+        session_state
+        .documents
+        .values()
+    ):
 
         documents.append(
             {
                 "filename":
-                    document["filename"],
+                    document[
+                        "filename"
+                    ],
 
                 "document_id":
-                    document["document_id"],
+                    document[
+                        "document_id"
+                    ],
 
                 "chunks":
-                    document["chunks"]
+                    document[
+                        "chunks"
+                    ]
             }
         )
 
@@ -779,13 +1033,18 @@ def get_documents():
 )
 def delete_document():
 
-    session_state = get_session_state(
-        "user_session_123"
+    session_state = (
+        get_session_state(
+            "user_session_123"
+        )
     )
 
-    data = request.get_json(
-        silent=True
-    ) or {}
+    data = (
+        request.get_json(
+            silent=True
+        )
+        or {}
+    )
 
     document_id = data.get(
         "document_id"
@@ -795,42 +1054,49 @@ def delete_document():
         "filename"
     )
 
-    # Allow deletion by document ID
+    document = None
+
+    # Find by document ID
 
     if document_id:
 
-        document = session_state.documents.get(
-            document_id
+        document = (
+            session_state
+            .documents
+            .get(
+                document_id
+            )
         )
 
-    # Also support deletion by filename
+    # Find by filename
 
     elif filename:
 
-        document_id = None
-        document = None
-
-        for current_id, current_document in (
-            session_state.documents.items()
+        for (
+            current_id,
+            current_document
+        ) in (
+            session_state
+            .documents
+            .items()
         ):
 
-            if current_document[
-                "filename"
-            ] == filename:
+            if (
+                current_document[
+                    "filename"
+                ]
+                == filename
+            ):
 
-                document_id = current_id
-                document = current_document
+                document_id = (
+                    current_id
+                )
+
+                document = (
+                    current_document
+                )
 
                 break
-
-    else:
-
-        return jsonify(
-            {
-                "error":
-                "Document ID or filename is required."
-            }
-        ), 400
 
     if not document:
 
@@ -843,28 +1109,31 @@ def delete_document():
 
     try:
 
-        # Remove document metadata
+        filename = document[
+            "filename"
+        ]
+
+        # Remove metadata
 
         session_state.documents.pop(
             document_id,
             None
         )
 
-        # Remove its chunks
+        # Remove chunks
 
         session_state.document_chunks.pop(
             document_id,
             None
         )
 
-        # Rebuild FAISS without deleted document
+        # Rebuild FAISS
 
         rebuild_vectorstore(
             session_state
         )
 
-        # Reset conversation because
-        # the available document context changed
+        # Reset conversation
 
         session_state.history.clear()
 
@@ -873,10 +1142,10 @@ def delete_document():
                 "success": True,
 
                 "message":
-                    f"'{document['filename']}' removed.",
+                    f"'{filename}' removed.",
 
                 "filename":
-                    document["filename"],
+                    filename,
 
                 "document_count":
                     len(
@@ -905,8 +1174,10 @@ def delete_document():
 )
 def clear_documents():
 
-    session_state = get_session_state(
-        "user_session_123"
+    session_state = (
+        get_session_state(
+            "user_session_123"
+        )
     )
 
     session_state.documents.clear()
@@ -920,65 +1191,14 @@ def clear_documents():
     return jsonify(
         {
             "success": True,
+
             "message":
-                "All documents removed."
+                "All documents removed.",
+
+            "document_count":
+                0
         }
     ), 200
-
-
-# RAG answer
-
-def answer_from_documents(
-    question,
-    session_state
-):
-
-    if session_state.vectorstore is None:
-
-        return (
-            "No documents are currently available."
-        )
-
-    # Retrieve the most relevant chunks
-
-    retrieved_documents = (
-        session_state.vectorstore
-        .similarity_search(
-            question,
-            k=5
-        )
-    )
-
-    if not retrieved_documents:
-
-        return (
-            "I couldn't find relevant information "
-            "in the uploaded documents."
-        )
-
-    context = build_context(
-        retrieved_documents
-    )
-
-    messages = rag_prompt.format_messages(
-        context=context,
-        question=question
-    )
-
-    response = llm.invoke(
-        messages
-    )
-
-    answer = response.content
-
-    citations = build_citations(
-        retrieved_documents
-    )
-
-    return (
-        answer.strip()
-        + citations
-    )
 
 
 # Chat endpoint
@@ -989,14 +1209,18 @@ def answer_from_documents(
 )
 def chat():
 
-    data = request.get_json(
-        silent=True
-    ) or {}
+    data = (
+        request.get_json(
+            silent=True
+        )
+        or {}
+    )
 
-    user_message = data.get(
-        "message",
-        ""
-    ).strip()
+    user_message = (
+        data
+        .get("message", "")
+        .strip()
+    )
 
     if not user_message:
 
@@ -1005,24 +1229,31 @@ def chat():
             status=400
         )
 
-    session_id = "user_session_123"
-
-    session_state = get_session_state(
-        session_id
+    session_state = (
+        get_session_state(
+            "user_session_123"
+        )
     )
 
     def generate_response():
 
         try:
 
-            # Use RAG when documents are available
+            # Use document RAG when documents exist
 
-            if session_state.vectorstore is not None:
+            if (
+                session_state.vectorstore
+                is not None
+            ):
 
-                answer = answer_from_documents(
-                    user_message,
-                    session_state
+                answer = (
+                    answer_from_documents(
+                        user_message,
+                        session_state
+                    )
                 )
+
+                # Save RAG conversation
 
                 session_state.history.add_message(
                     HumanMessage(
@@ -1040,91 +1271,38 @@ def chat():
                     session_state.history
                 )
 
-                # Stream the answer in small pieces
+            else:
 
-                chunk_size = 40
+                # Normal Eureka chat
 
-                for i in range(
-                    0,
-                    len(answer),
-                    chunk_size
-                ):
-
-                    yield answer[
-                        i:i + chunk_size
-                    ]
-
-                return
-
-            # Normal AI chat
-
-            if agent_with_history is not None:
-
-                for chunk in agent_with_history.stream(
-                    {
-                        "input":
-                            user_message
-                    },
-
-                    config={
-                        "configurable":
-                            {
-                                "session_id":
-                                    session_id
-                            }
-                    }
-                ):
-
-                    if isinstance(
-                        chunk,
-                        dict
-                    ):
-
-                        output = chunk.get(
-                            "output"
-                        )
-
-                        if output:
-
-                            yield output
-
-                    elif isinstance(
-                        chunk,
-                        str
-                    ):
-
-                        yield chunk
-
-                return
-
-            # Fallback if agent is unavailable
-
-            messages = [
-                (
-                    "system",
-                    """
-You are Eureka, a helpful AI assistant.
-Answer the user's question clearly and accurately.
-"""
-                ),
-                (
-                    "human",
-                    user_message
+                answer = (
+                    answer_normal_question(
+                        user_message,
+                        session_state
+                    )
                 )
-            ]
 
-            response = llm.invoke(
-                messages
-            )
+            # Send answer in chunks
 
-            yield response.content
+            chunk_size = 40
+
+            for start in range(
+                0,
+                len(answer),
+                chunk_size
+            ):
+
+                yield answer[
+                    start:
+                    start + chunk_size
+                ]
 
         except Exception as e:
 
             traceback.print_exc()
 
             yield (
-                f"Error while generating response: "
+                "Error while generating response: "
                 f"{str(e)}"
             )
 
@@ -1142,16 +1320,21 @@ Answer the user's question clearly and accurately.
 )
 def health():
 
-    session_state = get_session_state(
-        "user_session_123"
+    session_state = (
+        get_session_state(
+            "user_session_123"
+        )
     )
 
     return jsonify(
         {
-            "status": "ok",
+            "status":
+                "ok",
 
             "groq":
-                bool(groq_api_key),
+                bool(
+                    groq_api_key
+                ),
 
             "embeddings":
                 embeddings is not None,
@@ -1177,7 +1360,9 @@ def serve_frontend():
         "index.html"
     )
 
-    if os.path.exists(index_path):
+    if os.path.exists(
+        index_path
+    ):
 
         return send_from_directory(
             app.static_folder,
@@ -1190,18 +1375,23 @@ def serve_frontend():
     )
 
 
-# Error handler for large files
+# Handle files larger than 25 MB
 
 @app.errorhandler(413)
-def file_too_large(error):
+def file_too_large(
+    error
+):
 
     return jsonify(
         {
             "error":
-            "File is too large. Maximum size is 25 MB."
+            "File is too large. "
+            "Maximum size is 25 MB."
         }
     ), 413
 
+
+# Start application
 
 if __name__ == "__main__":
 
