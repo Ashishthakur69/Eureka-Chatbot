@@ -12,6 +12,7 @@
     --text-secondary: #848d97;
 
     --accent-color: #2f81f7;
+    --accent-hover: #4092ff;
 
     --success-color: #3fb950;
     --warning-color: #d29922;
@@ -29,12 +30,13 @@ body.light-theme {
     --container-bg: #ffffff;
     --element-bg: #e9ecef;
 
+    --border-color: #d0d7de;
+
     --text-primary: #1c1c1c;
     --text-secondary: #6c757d;
 
     --accent-color: #2f81f7;
-
-    --border-color: #d0d7de;
+    --accent-hover: #1769d1;
 }
 
 
@@ -81,7 +83,7 @@ body {
 #loader {
     position: fixed;
 
-    z-index: 999;
+    z-index: 9999;
 
     inset: 0;
 
@@ -102,7 +104,7 @@ body {
 
     font-size: 0.9rem;
 
-    margin-top: 10px;
+    margin-top: 12px;
 }
 
 
@@ -124,15 +126,15 @@ body:not(.loading) .app-container {
 /* Loading spinner */
 
 .spinner {
-    border: 4px solid rgba(255, 255, 255, 0.2);
+    width: 42px;
 
-    border-top: 4px solid var(--text-primary);
+    height: 42px;
+
+    border: 4px solid rgba(255, 255, 255, 0.15);
+
+    border-top-color: var(--accent-color);
 
     border-radius: 50%;
-
-    width: 40px;
-
-    height: 40px;
 
     animation: spin 1s linear infinite;
 }
@@ -140,11 +142,11 @@ body:not(.loading) .app-container {
 
 @keyframes spin {
 
-    0% {
+    from {
         transform: rotate(0deg);
     }
 
-    100% {
+    to {
         transform: rotate(360deg);
     }
 }
@@ -162,6 +164,8 @@ body:not(.loading) .app-container {
     display: flex;
 
     gap: 20px;
+
+    min-width: 0;
 }
 
 
@@ -170,6 +174,8 @@ body:not(.loading) .app-container {
 .sidebar {
     width: 320px;
 
+    min-width: 320px;
+
     flex-shrink: 0;
 
     display: flex;
@@ -177,6 +183,8 @@ body:not(.loading) .app-container {
     flex-direction: column;
 
     gap: 20px;
+
+    min-height: 0;
 }
 
 
@@ -198,11 +206,18 @@ body:not(.loading) .app-container {
 
 
 .sidebar-block h4 {
-    font-weight: 600;
-
     color: var(--text-primary);
 
     font-size: 0.95rem;
+
+    font-weight: 600;
+}
+
+
+/* Upload section */
+
+.file-upload-area {
+    flex-shrink: 0;
 }
 
 
@@ -211,30 +226,40 @@ body:not(.loading) .app-container {
 }
 
 
+.section-heading h4 {
+    margin-bottom: 5px;
+}
+
+
 .section-heading p {
     color: var(--text-secondary);
 
     font-size: 0.75rem;
-
-    margin-top: 4px;
 }
 
 
-/* Upload area */
-
-.file-upload-area {
-    flex-shrink: 0;
-}
-
+/* Upload zone */
 
 .upload-zone {
+    width: 100%;
+
+    min-height: 165px;
+
     background-color: var(--element-bg);
 
     border: 1px dashed var(--border-color);
 
     border-radius: var(--border-radius-inner);
 
-    padding: 28px 18px;
+    padding: 25px 15px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    justify-content: center;
+
+    align-items: center;
 
     text-align: center;
 
@@ -245,7 +270,8 @@ body:not(.loading) .app-container {
     transition:
         background-color var(--transition-speed),
         border-color var(--transition-speed),
-        transform 0.2s;
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
 
@@ -253,6 +279,9 @@ body:not(.loading) .app-container {
     border-color: var(--accent-color);
 
     transform: translateY(-2px);
+
+    box-shadow:
+        0 5px 20px rgba(47, 129, 247, 0.08);
 }
 
 
@@ -262,14 +291,14 @@ body:not(.loading) .app-container {
     background-color: rgba(47, 129, 247, 0.08);
 
     box-shadow:
-        0 0 15px rgba(47, 129, 247, 0.12);
+        0 0 20px rgba(47, 129, 247, 0.12);
 }
 
 
 .upload-zone i {
-    font-size: 2rem;
-
     color: var(--accent-color);
+
+    font-size: 2.2rem;
 
     margin-bottom: 12px;
 }
@@ -278,7 +307,9 @@ body:not(.loading) .app-container {
 .upload-title {
     color: var(--text-primary);
 
-    font-size: 0.88rem;
+    font-size: 0.85rem;
+
+    font-weight: 500;
 
     margin-bottom: 5px;
 }
@@ -287,7 +318,7 @@ body:not(.loading) .app-container {
 .upload-subtitle {
     color: var(--text-secondary);
 
-    font-size: 0.75rem;
+    font-size: 0.72rem;
 }
 
 
@@ -299,6 +330,10 @@ body:not(.loading) .app-container {
     min-height: 0;
 
     overflow: hidden;
+
+    display: flex;
+
+    flex-direction: column;
 }
 
 
@@ -311,11 +346,15 @@ body:not(.loading) .app-container {
 
     gap: 10px;
 
+    flex-shrink: 0;
+
     margin-bottom: 15px;
 }
 
 
 .document-count {
+    flex-shrink: 0;
+
     background-color: var(--element-bg);
 
     color: var(--text-secondary);
@@ -331,20 +370,24 @@ body:not(.loading) .app-container {
 
 
 .file-list {
+    flex: 1;
+
+    min-height: 0;
+
     overflow-y: auto;
 
-    height: 100%;
+    overflow-x: hidden;
 
-    padding-right: 3px;
+    padding-right: 4px;
 }
 
 
 .file-list .no-files {
     color: var(--text-secondary);
 
-    font-style: italic;
-
     font-size: 0.8rem;
+
+    font-style: italic;
 
     line-height: 1.5;
 
@@ -352,9 +395,13 @@ body:not(.loading) .app-container {
 }
 
 
-/* Individual file */
+/* Individual document */
 
 .file-item {
+    width: 100%;
+
+    min-width: 0;
+
     display: flex;
 
     align-items: center;
@@ -365,22 +412,20 @@ body:not(.loading) .app-container {
 
     padding: 11px;
 
+    margin-bottom: 9px;
+
     background-color: var(--element-bg);
 
     border: 1px solid transparent;
 
     border-radius: var(--border-radius-inner);
 
-    margin-bottom: 9px;
-
     color: var(--text-primary);
 
-    font-size: 0.8rem;
-
     transition:
-        background-color var(--transition-speed),
-        border-color var(--transition-speed),
-        transform 0.2s;
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        transform 0.2s ease;
 }
 
 
@@ -404,19 +449,43 @@ body:not(.loading) .app-container {
 }
 
 
-.file-item-info i {
+.file-item-info > i {
+    flex-shrink: 0;
+
     color: var(--accent-color);
 
-    flex-shrink: 0;
+    font-size: 0.9rem;
 }
 
 
 .file-name {
+    min-width: 0;
+
     overflow: hidden;
 
     text-overflow: ellipsis;
 
     white-space: nowrap;
+
+    font-size: 0.8rem;
+}
+
+
+/* Processing status */
+
+.file-status {
+    flex-shrink: 0;
+
+    color: var(--text-secondary);
+
+    font-size: 0.68rem;
+
+    white-space: nowrap;
+}
+
+
+.file-status.processing {
+    color: var(--warning-color);
 }
 
 
@@ -425,15 +494,29 @@ body:not(.loading) .app-container {
 .delete-btn {
     flex-shrink: 0;
 
+    width: 32px;
+
+    height: 32px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border: none;
+
+    border-radius: 8px;
+
+    background: transparent;
+
     color: var(--text-secondary);
 
     cursor: pointer;
 
-    font-size: 0.85rem;
+    font-size: 0.82rem;
 
-    padding: 7px;
-
-    border-radius: 8px;
+    padding: 0;
 
     transition:
         color 0.2s ease,
@@ -445,7 +528,7 @@ body:not(.loading) .app-container {
 .delete-btn:hover {
     color: var(--danger-color);
 
-    background-color: rgba(248, 81, 73, 0.1);
+    background-color: rgba(248, 81, 73, 0.12);
 }
 
 
@@ -454,23 +537,15 @@ body:not(.loading) .app-container {
 }
 
 
-/* Processing state */
+.delete-btn:focus {
+    outline: none;
 
-.file-status {
-    color: var(--text-secondary);
-
-    font-size: 0.7rem;
-
-    white-space: nowrap;
+    box-shadow:
+        0 0 0 2px rgba(248, 81, 73, 0.2);
 }
 
 
-.file-status.processing {
-    color: var(--warning-color);
-}
-
-
-/* Theme */
+/* Theme section */
 
 .theme-area {
     flex-shrink: 0;
@@ -498,10 +573,12 @@ body:not(.loading) .app-container {
 
 .theme-label i {
     color: var(--text-secondary);
+
+    font-size: 0.95rem;
 }
 
 
-/* Theme switch */
+/* Theme toggle */
 
 .theme-switch {
     position: relative;
@@ -511,6 +588,8 @@ body:not(.loading) .app-container {
     width: 50px;
 
     height: 28px;
+
+    flex-shrink: 0;
 }
 
 
@@ -526,11 +605,13 @@ body:not(.loading) .app-container {
 .slider {
     position: absolute;
 
-    cursor: pointer;
-
     inset: 0;
 
+    cursor: pointer;
+
     background-color: var(--element-bg);
+
+    border: 1px solid var(--border-color);
 
     border-radius: 28px;
 
@@ -539,17 +620,17 @@ body:not(.loading) .app-container {
 
 
 .slider:before {
-    position: absolute;
-
     content: "";
 
-    height: 20px;
+    position: absolute;
 
     width: 20px;
 
-    left: 4px;
+    height: 20px;
 
-    bottom: 4px;
+    left: 3px;
+
+    bottom: 3px;
 
     background-color: #ccc;
 
@@ -561,20 +642,26 @@ body:not(.loading) .app-container {
 
 input:checked + .slider {
     background-color: var(--accent-color);
+
+    border-color: var(--accent-color);
 }
 
 
 input:checked + .slider:before {
     transform: translateX(22px);
+
+    background-color: #ffffff;
 }
 
 
 /* Chat panel */
 
 .chat-panel {
-    flex-grow: 1;
+    flex: 1;
 
     min-width: 0;
+
+    min-height: 0;
 
     background-color: var(--container-bg);
 
@@ -597,7 +684,11 @@ input:checked + .slider:before {
 /* Chat header */
 
 .chat-header {
-    padding: 20px;
+    flex-shrink: 0;
+
+    min-height: 82px;
+
+    padding: 18px 20px;
 
     border-bottom: 1px solid var(--border-color);
 
@@ -612,9 +703,11 @@ input:checked + .slider:before {
 
 
 .chat-header h1 {
-    font-weight: 700;
+    color: var(--text-primary);
 
     font-size: 1.5rem;
+
+    font-weight: 700;
 
     letter-spacing: -0.5px;
 }
@@ -625,7 +718,7 @@ input:checked + .slider:before {
 
     font-size: 0.72rem;
 
-    margin-top: 4px;
+    margin-top: 5px;
 }
 
 
@@ -647,26 +740,33 @@ input:checked + .slider:before {
 
 
 .status-dot {
-    width: 7px;
+    width: 8px;
 
-    height: 7px;
+    height: 8px;
+
+    flex-shrink: 0;
+
+    background-color: var(--success-color);
 
     border-radius: 50%;
 
-    background-color: var(--success-color);
+    box-shadow:
+        0 0 7px rgba(63, 185, 80, 0.45);
 }
 
 
-/* Chat messages */
+/* Chat box */
 
 .chat-box {
-    flex-grow: 1;
+    flex: 1;
 
     min-height: 0;
 
     padding: 20px;
 
     overflow-y: auto;
+
+    overflow-x: hidden;
 
     display: flex;
 
@@ -676,7 +776,11 @@ input:checked + .slider:before {
 }
 
 
+/* Messages */
+
 .message {
+    position: relative;
+
     max-width: 75%;
 
     padding: 15px 20px;
@@ -685,23 +789,27 @@ input:checked + .slider:before {
 
     line-height: 1.6;
 
-    position: relative;
+    font-size: 0.9rem;
 
-    animation: slideInUp 0.4s ease-out;
+    overflow-wrap: anywhere;
+
+    animation: slideInUp 0.35s ease-out;
 }
 
 
 .message.bot {
+    align-self: flex-start;
+
     background-color: var(--element-bg);
 
-    align-self: flex-start;
+    color: var(--text-primary);
 }
 
 
 .message.user {
-    background-color: #213042;
-
     align-self: flex-end;
+
+    background-color: #213042;
 
     color: var(--text-primary);
 }
@@ -715,6 +823,8 @@ body.light-theme .message.user {
 
 
 .message-text {
+    min-width: 0;
+
     overflow-wrap: anywhere;
 }
 
@@ -729,9 +839,32 @@ body.light-theme .message.user {
 }
 
 
+.message-text h1,
+.message-text h2,
+.message-text h3 {
+    margin-top: 10px;
+
+    margin-bottom: 8px;
+}
+
+
 .message-text ul,
 .message-text ol {
-    margin: 8px 0 8px 20px;
+    margin-top: 8px;
+
+    margin-bottom: 8px;
+
+    padding-left: 20px;
+}
+
+
+.message-text li {
+    margin-bottom: 4px;
+}
+
+
+.message-text a {
+    color: var(--accent-color);
 }
 
 
@@ -741,19 +874,30 @@ body.light-theme .message.user {
     padding: 2px 5px;
 
     border-radius: 5px;
+
+    font-size: 0.85em;
 }
 
 
 .message-text pre {
+    max-width: 100%;
+
     overflow-x: auto;
+
+    background-color: rgba(0, 0, 0, 0.2);
 
     padding: 12px;
 
-    margin: 10px 0;
+    margin-top: 10px;
 
     border-radius: 10px;
+}
 
-    background-color: rgba(0, 0, 0, 0.18);
+
+.message-text pre code {
+    background: transparent;
+
+    padding: 0;
 }
 
 
@@ -766,13 +910,9 @@ body.light-theme .message.user {
 
     right: -35px;
 
-    background: var(--element-bg);
-
     width: 30px;
 
     height: 30px;
-
-    border-radius: 50%;
 
     display: flex;
 
@@ -780,13 +920,24 @@ body.light-theme .message.user {
 
     justify-content: center;
 
+    background-color: var(--element-bg);
+
+    border: 1px solid var(--border-color);
+
+    border-radius: 50%;
+
     color: var(--text-secondary);
 
     cursor: pointer;
 
+    font-size: 0.8rem;
+
     opacity: 0;
 
-    transition: all 0.3s ease;
+    transition:
+        opacity 0.2s ease,
+        right 0.2s ease,
+        color 0.2s ease;
 }
 
 
@@ -805,9 +956,13 @@ body.light-theme .message.user {
 /* Input area */
 
 .input-area {
+    flex-shrink: 0;
+
     padding: 20px;
 
     display: flex;
+
+    align-items: center;
 
     gap: 10px;
 
@@ -816,9 +971,11 @@ body.light-theme .message.user {
 
 
 #user-input {
-    flex-grow: 1;
+    flex: 1;
 
     min-width: 0;
+
+    height: 50px;
 
     background-color: var(--element-bg);
 
@@ -826,20 +983,20 @@ body.light-theme .message.user {
 
     border-radius: var(--border-radius-inner);
 
-    padding: 15px 20px;
+    padding: 0 20px;
 
     color: var(--text-primary);
 
-    font-size: 1rem;
-
     font-family: 'Inter', sans-serif;
+
+    font-size: 1rem;
 
     outline: none;
 
     transition:
         background-color var(--transition-speed),
-        border-color 0.2s,
-        box-shadow 0.2s;
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
 
@@ -856,6 +1013,13 @@ body.light-theme .message.user {
 }
 
 
+#user-input:disabled {
+    opacity: 0.6;
+
+    cursor: not-allowed;
+}
+
+
 /* Send button */
 
 #send-btn {
@@ -865,27 +1029,35 @@ body.light-theme .message.user {
 
     height: 50px;
 
-    background-color: var(--accent-color);
-
     border: none;
 
     border-radius: 50%;
 
+    background-color: var(--accent-color);
+
     color: #ffffff;
 
-    font-size: 1.2rem;
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    font-size: 1.15rem;
 
     cursor: pointer;
 
     transition:
-        background-color var(--transition-speed),
-        transform 0.2s,
-        opacity 0.2s;
+        background-color 0.2s ease,
+        transform 0.2s ease,
+        opacity 0.2s ease;
 }
 
 
 #send-btn:hover:not(:disabled) {
-    background-color: #4092ff;
+    background-color: var(--accent-hover);
+
+    transform: translateY(-1px);
 }
 
 
@@ -908,7 +1080,7 @@ body.light-theme .message.user {
     from {
         opacity: 0;
 
-        transform: translateY(20px);
+        transform: translateY(15px);
     }
 
     to {
@@ -923,7 +1095,7 @@ body.light-theme .message.user {
 
 .chat-box::-webkit-scrollbar,
 .file-list::-webkit-scrollbar {
-    width: 8px;
+    width: 7px;
 }
 
 
@@ -939,7 +1111,7 @@ body.light-theme .message.user {
 
     border-radius: 10px;
 
-    border: 2px solid var(--container-bg);
+    border: 1px solid var(--container-bg);
 }
 
 
@@ -949,7 +1121,19 @@ body.light-theme .message.user {
 }
 
 
-/* Smaller desktop windows */
+/* Firefox scrollbar */
+
+.chat-box,
+.file-list {
+    scrollbar-width: thin;
+
+    scrollbar-color:
+        var(--element-bg)
+        transparent;
+}
+
+
+/* Smaller desktop screens */
 
 @media (max-width: 1100px) {
 
@@ -964,31 +1148,35 @@ body.light-theme .message.user {
 
 
     .sidebar {
-        width: 270px;
+        width: 280px;
+
+        min-width: 280px;
 
         gap: 12px;
     }
 
 
     .sidebar-block {
-        padding: 16px;
+        padding: 17px;
 
         border-radius: 20px;
     }
 
 
     .upload-zone {
-        padding: 22px 12px;
+        min-height: 145px;
+
+        padding: 20px 12px;
     }
 
 
     .chat-header {
-        padding: 18px;
+        padding: 17px;
     }
 
 
     .chat-box {
-        padding: 18px;
+        padding: 17px;
     }
 
 
@@ -998,9 +1186,9 @@ body.light-theme .message.user {
 }
 
 
-/* Narrow desktop window */
+/* Narrow desktop screens */
 
-@media (max-width: 850px) {
+@media (max-width: 900px) {
 
     body {
         padding: 8px;
@@ -1013,7 +1201,9 @@ body.light-theme .message.user {
 
 
     .sidebar {
-        width: 230px;
+        width: 240px;
+
+        min-width: 240px;
 
         gap: 8px;
     }
@@ -1037,7 +1227,9 @@ body.light-theme .message.user {
 
 
     .upload-zone {
-        padding: 20px 8px;
+        min-height: 125px;
+
+        padding: 16px 8px;
     }
 
 
@@ -1056,29 +1248,27 @@ body.light-theme .message.user {
     }
 
 
-    .document-count {
-        font-size: 0.62rem;
-
-        padding: 4px 7px;
+    .file-item {
+        padding: 9px;
     }
 
 
-    .file-item {
-        padding: 9px;
-
+    .file-name {
         font-size: 0.72rem;
     }
 
 
-    .delete-btn {
-        font-size: 0.75rem;
-
-        padding: 5px;
+    .file-status {
+        font-size: 0.6rem;
     }
 
 
-    .chat-header {
-        padding: 15px;
+    .delete-btn {
+        width: 28px;
+
+        height: 28px;
+
+        font-size: 0.75rem;
     }
 
 
@@ -1092,23 +1282,20 @@ body.light-theme .message.user {
     }
 
 
-    .chat-box {
-        padding: 15px;
-    }
+    .message {
+        max-width: 78%;
 
-
-    .input-area {
-        padding: 12px;
+        font-size: 0.85rem;
     }
 }
 
 
 /* Very narrow desktop window */
 
-@media (max-width: 650px) {
+@media (max-width: 750px) {
 
     body {
-        padding: 6px;
+        padding: 5px;
     }
 
 
@@ -1118,21 +1305,28 @@ body.light-theme .message.user {
 
 
     .sidebar {
-        width: 200px;
+        width: 205px;
+
+        min-width: 205px;
 
         gap: 6px;
     }
 
 
     .sidebar-block {
-        padding: 12px;
+        padding: 11px;
 
-        border-radius: 16px;
+        border-radius: 15px;
     }
 
 
     .sidebar-block h4 {
-        font-size: 0.75rem;
+        font-size: 0.74rem;
+    }
+
+
+    .section-heading {
+        margin-bottom: 10px;
     }
 
 
@@ -1142,34 +1336,38 @@ body.light-theme .message.user {
 
 
     .upload-zone {
-        padding: 16px 6px;
+        min-height: 105px;
+
+        padding: 12px 5px;
     }
 
 
     .upload-zone i {
-        font-size: 1.4rem;
+        font-size: 1.35rem;
+
+        margin-bottom: 7px;
     }
 
 
     .upload-title {
-        font-size: 0.65rem;
+        font-size: 0.62rem;
     }
 
 
     .upload-subtitle {
-        font-size: 0.58rem;
+        font-size: 0.55rem;
     }
 
 
     .documents-header {
-        gap: 5px;
+        margin-bottom: 9px;
     }
 
 
     .document-count {
         font-size: 0.55rem;
 
-        padding: 4px 5px;
+        padding: 4px 6px;
     }
 
 
@@ -1177,18 +1375,44 @@ body.light-theme .message.user {
         padding: 7px;
 
         gap: 4px;
+
+        border-radius: 10px;
+    }
+
+
+    .file-item-info {
+        gap: 5px;
+    }
+
+
+    .file-item-info > i {
+        font-size: 0.7rem;
+    }
+
+
+    .file-name {
+        font-size: 0.62rem;
+    }
+
+
+    .file-status {
+        display: none;
     }
 
 
     .delete-btn {
-        font-size: 0.68rem;
+        width: 25px;
 
-        padding: 4px;
+        height: 25px;
+
+        font-size: 0.65rem;
     }
 
 
     .theme-label {
-        font-size: 0.7rem;
+        font-size: 0.65rem;
+
+        gap: 6px;
     }
 
 
@@ -1204,9 +1428,9 @@ body.light-theme .message.user {
 
         height: 17px;
 
-        bottom: 3.5px;
-
         left: 3px;
+
+        bottom: 3px;
     }
 
 
@@ -1215,8 +1439,15 @@ body.light-theme .message.user {
     }
 
 
+    .chat-header {
+        min-height: 68px;
+
+        padding: 12px;
+    }
+
+
     .chat-header h1 {
-        font-size: 1.1rem;
+        font-size: 1.05rem;
     }
 
 
@@ -1230,19 +1461,33 @@ body.light-theme .message.user {
     }
 
 
+    .chat-box {
+        padding: 12px;
+    }
+
+
     .message {
         max-width: 85%;
 
         padding: 11px 13px;
 
-        font-size: 0.8rem;
+        font-size: 0.78rem;
+    }
+
+
+    .input-area {
+        padding: 9px;
+
+        gap: 7px;
     }
 
 
     #user-input {
-        padding: 11px 13px;
+        height: 44px;
 
-        font-size: 0.8rem;
+        padding: 0 12px;
+
+        font-size: 0.78rem;
     }
 
 
@@ -1251,92 +1496,105 @@ body.light-theme .message.user {
 
         height: 44px;
 
-        font-size: 1rem;
+        font-size: 0.95rem;
     }
 }
 
 
-/* Small desktop windows */
+/* Small screens */
 
-@media (max-width: 480px) {
+@media (max-width: 600px) {
 
     body {
-        padding: 4px;
+        padding: 3px;
     }
 
 
     .app-container {
-        gap: 5px;
+        gap: 4px;
     }
 
 
     .sidebar {
         width: 175px;
 
-        gap: 5px;
+        min-width: 175px;
+
+        gap: 4px;
     }
 
 
     .sidebar-block {
-        padding: 10px;
+        padding: 9px;
 
-        border-radius: 14px;
+        border-radius: 13px;
     }
 
 
     .sidebar-block h4 {
-        font-size: 0.68rem;
+        font-size: 0.66rem;
     }
 
 
     .upload-zone {
-        padding: 13px 5px;
+        min-height: 90px;
+
+        padding: 9px 4px;
     }
 
 
     .upload-zone i {
-        font-size: 1.2rem;
+        font-size: 1.15rem;
+
+        margin-bottom: 5px;
     }
 
 
     .upload-title {
-        font-size: 0.55rem;
+        font-size: 0.52rem;
     }
 
 
     .upload-subtitle {
-        font-size: 0.5rem;
+        font-size: 0.47rem;
     }
 
 
     .document-count {
-        font-size: 0.5rem;
+        font-size: 0.48rem;
 
         padding: 3px 5px;
     }
 
 
     .file-item {
-        font-size: 0.6rem;
-
         padding: 6px;
+
+        margin-bottom: 6px;
+    }
+
+
+    .file-name {
+        font-size: 0.56rem;
     }
 
 
     .delete-btn {
-        font-size: 0.6rem;
+        width: 23px;
 
-        padding: 3px;
+        height: 23px;
+
+        font-size: 0.58rem;
     }
 
 
     .theme-label {
-        font-size: 0.6rem;
+        font-size: 0.56rem;
     }
 
 
     .theme-switch {
-        width: 36px;
+        width: 37px;
 
         height: 21px;
     }
@@ -1347,49 +1605,61 @@ body.light-theme .message.user {
 
         height: 15px;
 
-        left: 3px;
+        left: 2px;
 
-        bottom: 3px;
+        bottom: 2px;
     }
 
 
     input:checked + .slider:before {
-        transform: translateX(15px);
+        transform: translateX(16px);
     }
 
 
     .chat-header {
-        padding: 12px;
+        padding: 10px;
     }
 
 
     .chat-header h1 {
-        font-size: 0.95rem;
+        font-size: 0.9rem;
     }
 
 
-    .chat-subtitle,
     .chat-status {
         display: none;
     }
 
 
     .chat-box {
-        padding: 10px;
+        padding: 9px;
+    }
+
+
+    .message {
+        max-width: 88%;
+
+        padding: 9px 11px;
+
+        font-size: 0.7rem;
+
+        line-height: 1.5;
     }
 
 
     .input-area {
-        padding: 8px;
+        padding: 7px;
 
-        gap: 6px;
+        gap: 5px;
     }
 
 
     #user-input {
-        padding: 10px;
+        height: 40px;
 
-        font-size: 0.72rem;
+        padding: 0 10px;
+
+        font-size: 0.68rem;
     }
 
 
@@ -1398,6 +1668,43 @@ body.light-theme .message.user {
 
         height: 40px;
 
-        font-size: 0.9rem;
+        font-size: 0.85rem;
     }
+
+
+    .copy-btn {
+        width: 25px;
+
+        height: 25px;
+
+        right: -28px;
+
+        font-size: 0.65rem;
+    }
+
+
+    .message.bot:hover .copy-btn {
+        right: -32px;
+    }
+}
+
+
+/* Prevent accidental horizontal scrolling */
+
+html,
+body {
+    overflow: hidden;
+}
+
+
+.app-container,
+.sidebar,
+.chat-panel {
+    overflow: hidden;
+}
+
+
+.file-list,
+.chat-box {
+    overscroll-behavior: contain;
 }
