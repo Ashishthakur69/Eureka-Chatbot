@@ -1,187 +1,61 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
 
-    document.body.classList.remove('loading');
+    document.body.classList.remove("loading");
 
-    const chatBox = document.getElementById('chat-box');
-    const userInput = document.getElementById('user-input');
-    const sendBtn = document.getElementById('send-btn');
+    const chatBox = document.getElementById("chat-box");
+    const userInput = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
 
-    const uploadZone = document.getElementById('upload-zone');
-    const fileInput = document.getElementById('file-input');
-    const fileList = document.getElementById('file-list');
+    const uploadZone = document.getElementById("upload-zone");
+    const fileInput = document.getElementById("file-input");
+    const fileList = document.getElementById("file-list");
 
-    const documentCount = document.getElementById('document-count');
-    const clearDocumentsBtn = document.getElementById('clear-documents-btn');
+    const themeToggle = document.getElementById("theme-toggle");
+    const themeIcon = document.getElementById("theme-icon");
+    const themeText = document.getElementById("theme-text");
 
-    const themeToggle = document.getElementById('theme-toggle');
-    const themeIcon = document.getElementById('theme-icon');
-    const themeText = document.getElementById('theme-text');
-
-    const chatStatus = document.getElementById('chat-status');
-
-    const ragStatus = document.getElementById('rag-status');
-    const ragStatusText = document.getElementById('rag-status-text');
+    let uploadedDocuments = [];
 
 
-    const MAX_DOCUMENTS = 5;
-    const MAX_FILE_SIZE = 25 * 1024 * 1024;
+    // Add a message to the chat.
+    function addMessage(sender, text) {
 
-    const allowedExtensions = [
-        '.pdf',
-        '.docx'
-    ];
-
-
-    // Update the small status shown in the chat header.
-    function setChatStatus(text, busy = false) {
-
-        chatStatus.classList.toggle(
-            'busy',
-            busy
-        );
-
-        const dot = chatStatus.querySelector(
-            '.status-dot'
-        );
-
-        if (dot) {
-            dot.style.backgroundColor = busy
-                ? 'var(--warning-color)'
-                : 'var(--success-color)';
-        }
-
-        chatStatus.lastChild.textContent = ` ${text}`;
-    }
-
-
-    // Show or hide the RAG status message.
-    function setRagStatus(visible, text = '') {
-
-        ragStatus.classList.toggle(
-            'hidden',
-            !visible
-        );
-
-        if (text) {
-            ragStatusText.textContent = text;
-        }
-    }
-
-
-    // Create a chat message element.
-    function createMessageDiv(sender) {
-
-        const messageDiv = document.createElement('div');
+        const messageDiv = document.createElement("div");
 
         messageDiv.className = `message ${sender}`;
 
-        const textElement = document.createElement('div');
+        const textElement = document.createElement("div");
 
-        textElement.className = 'message-text';
+        textElement.className = "message-text";
 
-        messageDiv.appendChild(textElement);
-
-        return messageDiv;
-    }
-
-
-    // Add a normal message to the chat.
-    function addMessage(sender, text) {
-
-        const messageDiv = createMessageDiv(sender);
-
-        const textElement = messageDiv.querySelector(
-            '.message-text'
-        );
-
-        if (sender === 'bot') {
+        if (sender === "bot") {
             textElement.innerHTML = marked.parse(text);
         } else {
             textElement.textContent = text;
         }
 
-        if (sender === 'bot') {
+        messageDiv.appendChild(textElement);
 
-            const copyBtn = document.createElement('i');
+        if (sender === "bot") {
 
-            copyBtn.className =
-                'fas fa-copy copy-btn';
+            const copyButton =
+                document.createElement("i");
 
-            copyBtn.title = 'Copy text';
+            copyButton.className =
+                "fas fa-copy copy-btn";
 
-            messageDiv.appendChild(copyBtn);
+            copyButton.title =
+                "Copy text";
+
+            messageDiv.appendChild(
+                copyButton
+            );
         }
 
         chatBox.appendChild(messageDiv);
 
         chatBox.scrollTop =
             chatBox.scrollHeight;
-    }
-
-
-    // Format the source section returned by the backend.
-    function formatBotResponse(text) {
-
-        const sourceMarker = '\n\nSources:\n';
-
-        if (!text.includes(sourceMarker)) {
-            return marked.parse(text);
-        }
-
-        const parts = text.split(
-            sourceMarker
-        );
-
-        const answer = parts[0];
-
-        const sourceText = parts[1] || '';
-
-        const sources = sourceText
-            .split('\n')
-            .map(source => source.trim())
-            .filter(source => source.startsWith('•'));
-
-        let html = marked.parse(answer);
-
-        if (sources.length) {
-
-            html += `
-                <div class="sources">
-                    <div class="sources-title">
-                        <i class="fas fa-book-open"></i>
-                        Sources
-                    </div>
-            `;
-
-            sources.forEach(source => {
-
-                const cleanSource =
-                    source.replace(/^•\s*/, '');
-
-                html += `
-                    <div class="source-item">
-                        <i class="fas fa-file-lines"></i>
-                        ${escapeHtml(cleanSource)}
-                    </div>
-                `;
-            });
-
-            html += '</div>';
-        }
-
-        return html;
-    }
-
-
-    // Keep source filenames safe when adding them to the page.
-    function escapeHtml(text) {
-
-        const div =
-            document.createElement('div');
-
-        div.textContent = text;
-
-        return div.innerHTML;
     }
 
 
@@ -192,69 +66,62 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        addMessage(
-            'user',
-            message
-        );
+        addMessage("user", message);
 
-        userInput.value = '';
+        userInput.value = "";
 
-        sendBtn.disabled = true;
+        const messageDiv =
+            document.createElement("div");
 
-        setChatStatus(
-            'Thinking...',
-            true
-        );
-
-        const botMessageDiv =
-            createMessageDiv('bot');
+        messageDiv.className =
+            "message bot";
 
         const textElement =
-            botMessageDiv.querySelector(
-                '.message-text'
-            );
+            document.createElement("div");
 
-        chatBox.appendChild(
-            botMessageDiv
+        textElement.className =
+            "message-text";
+
+        messageDiv.appendChild(
+            textElement
         );
 
-        chatBox.scrollTop =
-            chatBox.scrollHeight;
+        chatBox.appendChild(
+            messageDiv
+        );
+
+        sendBtn.disabled = true;
+        userInput.disabled = true;
 
         try {
 
             const response = await fetch(
-                '/chat',
+                "/chat",
                 {
-                    method: 'POST',
+                    method: "POST",
 
                     headers: {
-                        'Content-Type':
-                            'application/json'
+                        "Content-Type":
+                            "application/json"
                     },
 
                     body: JSON.stringify({
-                        message
+                        message: message
                     })
                 }
             );
 
-
             if (!response.ok) {
-
                 throw new Error(
-                    `Server returned ${response.status}`
+                    `Server error: ${response.status}`
                 );
             }
-
 
             if (!response.body) {
-
                 throw new Error(
-                    'No response body.'
+                    "No response received."
                 );
             }
-
 
             const reader =
                 response.body.getReader();
@@ -262,8 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const decoder =
                 new TextDecoder();
 
-            let fullText = '';
-
+            let fullText = "";
 
             while (true) {
 
@@ -272,11 +138,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     done
                 } = await reader.read();
 
-
                 if (done) {
                     break;
                 }
-
 
                 fullText += decoder.decode(
                     value,
@@ -285,468 +149,408 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 );
 
-
                 textElement.innerHTML =
-                    formatBotResponse(
-                        fullText + '▋'
+                    marked.parse(
+                        fullText + "▋"
                     );
 
-
-                const isScrolledToBottom =
-                    chatBox.scrollHeight -
-                    chatBox.clientHeight <=
-                    chatBox.scrollTop + 40;
-
-
-                if (isScrolledToBottom) {
-
-                    chatBox.scrollTop =
-                        chatBox.scrollHeight;
-                }
+                chatBox.scrollTop =
+                    chatBox.scrollHeight;
             }
 
-
             textElement.innerHTML =
-                formatBotResponse(
-                    fullText
-                );
+                marked.parse(fullText);
 
+            // Add copy button after response.
+            const copyButton =
+                document.createElement("i");
+
+            copyButton.className =
+                "fas fa-copy copy-btn";
+
+            copyButton.title =
+                "Copy text";
+
+            messageDiv.appendChild(
+                copyButton
+            );
 
         } catch (error) {
 
             console.error(
-                'Chat error:',
+                "Chat error:",
                 error
             );
 
-            textElement.innerHTML =
-                marked.parse(
-                    '❌ I could not connect to the server. Please try again.'
-                );
+            textElement.textContent =
+                "❌ Could not connect to Eureka.";
 
         } finally {
 
             sendBtn.disabled = false;
-
-            setChatStatus(
-                'Ready',
-                false
-            );
+            userInput.disabled = false;
 
             userInput.focus();
         }
     }
 
 
-    // Display one uploaded document in the sidebar.
-    function displayFile(
-        filename,
-        status = 'Ready',
-        statusClass = 'ready'
-    ) {
+    // Update the document counter.
+    function updateDocumentCount() {
 
-        const existing =
-            [...fileList.querySelectorAll(
-                '.file-item'
-            )].find(
-                item =>
-                    item.dataset.filename === filename
+        const counter =
+            document.getElementById(
+                "document-count"
             );
 
+        if (!counter) {
+            return;
+        }
 
-        if (existing) {
+        counter.textContent =
+            `${uploadedDocuments.length} / 5`;
+    }
 
-            const statusElement =
-                existing.querySelector(
-                    '.file-status'
+
+    // Display all uploaded documents.
+    function renderDocuments() {
+
+        fileList.innerHTML = "";
+
+        if (uploadedDocuments.length === 0) {
+
+            const emptyMessage =
+                document.createElement("p");
+
+            emptyMessage.className =
+                "no-files";
+
+            emptyMessage.textContent =
+                "📪 No documents uploaded yet.";
+
+            fileList.appendChild(
+                emptyMessage
+            );
+
+            updateDocumentCount();
+
+            return;
+        }
+
+
+        uploadedDocuments.forEach(
+            (filename) => {
+
+                const fileItem =
+                    document.createElement("div");
+
+                fileItem.className =
+                    "file-item";
+
+
+                const fileInfo =
+                    document.createElement("div");
+
+                fileInfo.className =
+                    "file-item-info";
+
+
+                const fileIcon =
+                    document.createElement("i");
+
+                fileIcon.className =
+                    "fas fa-file-alt";
+
+
+                const fileName =
+                    document.createElement("span");
+
+                fileName.className =
+                    "file-name";
+
+                fileName.textContent =
+                    filename;
+
+
+                fileInfo.appendChild(
+                    fileIcon
                 );
 
-            statusElement.textContent =
-                status;
-
-            statusElement.className =
-                `file-status ${statusClass}`;
-
-            return existing;
-        }
+                fileInfo.appendChild(
+                    fileName
+                );
 
 
-        const noFiles =
-            fileList.querySelector(
-                '.no-files'
-            );
+                // Delete button.
+                const deleteButton =
+                    document.createElement("button");
+
+                deleteButton.type =
+                    "button";
+
+                deleteButton.className =
+                    "delete-btn";
+
+                deleteButton.title =
+                    `Delete ${filename}`;
+
+                deleteButton.dataset.filename =
+                    filename;
+
+                deleteButton.innerHTML =
+                    '<i class="fas fa-trash"></i>';
 
 
-        if (noFiles) {
-            noFiles.style.display = 'none';
-        }
+                fileItem.appendChild(
+                    fileInfo
+                );
 
+                fileItem.appendChild(
+                    deleteButton
+                );
 
-        const fileItem =
-            document.createElement('div');
-
-
-        fileItem.className =
-            'file-item';
-
-
-        fileItem.dataset.filename =
-            filename;
-
-
-        fileItem.innerHTML = `
-            <div class="file-item-info">
-                <i class="fas fa-file-lines"></i>
-
-                <span
-                    class="file-name"
-                    title="${escapeHtml(filename)}"
-                >
-                    ${escapeHtml(filename)}
-                </span>
-            </div>
-
-            <span class="file-status ${statusClass}">
-                ${status}
-            </span>
-        `;
-
-
-        fileList.appendChild(
-            fileItem
+                fileList.appendChild(
+                    fileItem
+                );
+            }
         );
 
-
-        return fileItem;
+        updateDocumentCount();
     }
 
 
-    // Update the document counter.
-    function updateDocumentCount(count) {
-
-        documentCount.textContent =
-            `${count} / ${MAX_DOCUMENTS}`;
-
-
-        clearDocumentsBtn.disabled =
-            count === 0;
-    }
-
-
-    // Refresh the sidebar from the backend.
+    // Load documents from the backend.
     async function loadDocuments() {
 
         try {
 
             const response =
                 await fetch(
-                    '/documents'
+                    "/documents"
                 );
-
 
             if (!response.ok) {
                 return;
             }
 
+            const data =
+                await response.json();
+
+            uploadedDocuments =
+                data.documents || [];
+
+            renderDocuments();
+
+        } catch (error) {
+
+            console.error(
+                "Document loading error:",
+                error
+            );
+        }
+    }
+
+
+    // Upload a document.
+    async function uploadFile(file) {
+
+        const temporaryItem =
+            document.createElement("div");
+
+        temporaryItem.className =
+            "file-item";
+
+
+        const fileInfo =
+            document.createElement("div");
+
+        fileInfo.className =
+            "file-item-info";
+
+
+        const icon =
+            document.createElement("i");
+
+        icon.className =
+            "fas fa-file-alt";
+
+
+        const name =
+            document.createElement("span");
+
+        name.className =
+            "file-name";
+
+        name.textContent =
+            file.name;
+
+
+        fileInfo.appendChild(icon);
+        fileInfo.appendChild(name);
+
+
+        const status =
+            document.createElement("span");
+
+        status.className =
+            "file-status processing";
+
+        status.textContent =
+            "Processing...";
+
+
+        temporaryItem.appendChild(
+            fileInfo
+        );
+
+        temporaryItem.appendChild(
+            status
+        );
+
+        fileList.appendChild(
+            temporaryItem
+        );
+
+
+        const formData =
+            new FormData();
+
+        formData.append(
+            "file",
+            file
+        );
+
+
+        try {
+
+            const response =
+                await fetch(
+                    "/upload",
+                    {
+                        method: "POST",
+                        body: formData
+                    }
+                );
 
             const data =
                 await response.json();
 
 
-            fileList.innerHTML = '';
-
-
-            if (
-                !data.documents ||
-                data.documents.length === 0
-            ) {
-
-                fileList.innerHTML = `
-                    <p class="no-files">
-                        📪 No documents uploaded yet.
-                    </p>
-                `;
-
-            } else {
-
-                data.documents.forEach(
-                    filename => {
-
-                        displayFile(
-                            filename,
-                            'Ready',
-                            'ready'
-                        );
-                    }
-                );
-            }
-
-
-            updateDocumentCount(
-                data.count || 0
-            );
-
-
-        } catch (error) {
-
-            console.error(
-                'Could not load documents:',
-                error
-            );
-        }
-    }
-
-
-    // Check a selected file before uploading it.
-    function validateFile(file) {
-
-        const extension =
-            '.' +
-            file.name
-                .split('.')
-                .pop()
-                .toLowerCase();
-
-
-        if (!allowedExtensions.includes(
-            extension
-        )) {
-
-            alert(
-                'Unsupported file type. Please upload a PDF or DOCX file.'
-            );
-
-            return false;
-        }
-
-
-        if (file.size > MAX_FILE_SIZE) {
-
-            alert(
-                `${file.name} is larger than 25 MB. Please choose a smaller file.`
-            );
-
-            return false;
-        }
-
-
-        return true;
-    }
-
-
-    // Upload one file to the backend.
-    async function uploadFile(file) {
-
-        const fileItem =
-            displayFile(
-                file.name,
-                'Uploading...',
-                'processing'
-            );
-
-
-        try {
-
-            const formData =
-                new FormData();
-
-
-            formData.append(
-                'file',
-                file
-            );
-
-
-            const response =
-                await fetch(
-                    '/upload',
-                    {
-                        method: 'POST',
-                        body: formData
-                    }
-                );
-
-
-            let data = {};
-
-            try {
-                data =
-                    await response.json();
-            } catch {
-                data = {};
-            }
-
-
-            if (
-                response.ok &&
-                data.success
-            ) {
-
-                const statusElement =
-                    fileItem.querySelector(
-                        '.file-status'
-                    );
-
-
-                statusElement.textContent =
-                    'Ready ✓';
-
-
-                statusElement.className =
-                    'file-status ready';
-
-
-                updateDocumentCount(
-                    data.document_count
-                );
-
-
-                setChatStatus(
-                    'Documents ready',
-                    false
-                );
-
-
-            } else {
+            if (!response.ok || !data.success) {
 
                 throw new Error(
                     data.error ||
-                    'Upload failed.'
+                    "Upload failed."
                 );
             }
+
+
+            uploadedDocuments =
+                data.documents || [];
+
+            renderDocuments();
 
 
         } catch (error) {
 
             console.error(
-                'Upload error:',
+                "Upload error:",
                 error
             );
 
+            temporaryItem.remove();
 
-            fileItem.remove();
-
-
-            const remainingFiles =
-                fileList.querySelectorAll(
-                    '.file-item'
-                ).length;
-
-
-            if (remainingFiles === 0) {
-
-                fileList.innerHTML = `
-                    <p class="no-files">
-                        📪 No documents uploaded yet.
-                    </p>
-                `;
-            }
-
+            renderDocuments();
 
             alert(
-                `${file.name}: ${error.message}`
+                error.message ||
+                "Failed to upload document."
             );
-
-
-            await loadDocuments();
         }
     }
 
 
-    // Handle selected or dropped files.
-    async function handleFiles(files) {
+    // Handle selected files.
+    function handleFiles(files) {
 
-        const selectedFiles =
-            Array.from(files);
-
-
-        if (!selectedFiles.length) {
+        if (!files || files.length === 0) {
             return;
         }
 
 
-        const currentCount =
-            fileList.querySelectorAll(
-                '.file-item'
-            ).length;
-
-
         const availableSlots =
-            MAX_DOCUMENTS -
-            currentCount;
+            5 - uploadedDocuments.length;
 
 
         if (availableSlots <= 0) {
 
             alert(
-                `You can upload a maximum of ${MAX_DOCUMENTS} documents.`
+                "You can upload a maximum of 5 documents."
             );
 
             return;
         }
 
 
-        const filesToUpload =
-            selectedFiles.slice(
+        const selectedFiles =
+            Array.from(files).slice(
                 0,
                 availableSlots
             );
 
 
-        if (
-            selectedFiles.length >
-            availableSlots
-        ) {
+        selectedFiles.forEach(
+            (file) => {
 
-            alert(
-                `Only ${availableSlots} more document(s) can be uploaded.`
-            );
-        }
+                const allowedTypes = [
+                    "application/pdf",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                ];
 
 
-        for (const file of filesToUpload) {
+                if (
+                    !allowedTypes.includes(
+                        file.type
+                    )
+                ) {
 
-            if (!validateFile(file)) {
-                continue;
-            }
+                    alert(
+                        `${file.name} is not supported. Please upload a PDF or DOCX file.`
+                    );
+
+                    return;
+                }
 
 
-            const alreadyUploaded =
-                [...fileList.querySelectorAll(
-                    '.file-item'
-                )].some(
-                    item =>
-                        item.dataset.filename ===
+                if (
+                    uploadedDocuments.includes(
                         file.name
-                );
+                    )
+                ) {
+
+                    alert(
+                        `${file.name} is already uploaded.`
+                    );
+
+                    return;
+                }
 
 
-            if (alreadyUploaded) {
-
-                alert(
-                    `${file.name} is already uploaded.`
-                );
-
-                continue;
+                uploadFile(file);
             }
+        );
 
 
-            await uploadFile(file);
-        }
-
-
-        fileInput.value = '';
-
-        await loadDocuments();
+        fileInput.value = "";
     }
 
 
-    // Clear the complete document collection.
-    async function clearDocuments() {
+    // Delete one document.
+    async function deleteDocument(filename) {
 
         const confirmed =
             confirm(
-                'Remove all uploaded documents?'
+                `Delete "${filename}"?`
             );
 
 
@@ -755,17 +559,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
 
-        clearDocumentsBtn.disabled =
-            true;
-
-
         try {
 
             const response =
                 await fetch(
-                    '/clear_document',
+                    "/delete_document",
                     {
-                        method: 'POST'
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body: JSON.stringify({
+                            filename: filename
+                        })
                     }
                 );
 
@@ -774,133 +583,79 @@ document.addEventListener('DOMContentLoaded', () => {
                 await response.json();
 
 
-            if (!response.ok) {
+            if (!response.ok || !data.success) {
 
                 throw new Error(
                     data.error ||
-                    'Could not clear documents.'
+                    "Could not delete document."
                 );
             }
 
 
-            fileList.innerHTML = `
-                <p class="no-files">
-                    📪 No documents uploaded yet.
-                </p>
-            `;
+            uploadedDocuments =
+                data.documents || [];
 
 
-            updateDocumentCount(0);
-
-
-            setRagStatus(
-                false
-            );
-
-
-            setChatStatus(
-                'Ready',
-                false
-            );
-
-
-            addMessage(
-                'bot',
-                'Document context cleared. You can upload new documents or ask me anything.'
-            );
+            renderDocuments();
 
 
         } catch (error) {
 
             console.error(
-                'Clear documents error:',
+                "Delete error:",
                 error
             );
 
-
             alert(
-                error.message
+                error.message ||
+                "Failed to delete document."
             );
-
-
-            await loadDocuments();
         }
     }
 
 
-    // Switch between dark and light themes.
-    themeToggle.addEventListener(
-        'change',
-        () => {
-
-            document.body.classList.toggle(
-                'light-theme'
-            );
-
-
-            if (themeToggle.checked) {
-
-                themeIcon.className =
-                    'fas fa-moon';
-
-                themeText.textContent =
-                    'Dark Mode';
-
-            } else {
-
-                themeIcon.className =
-                    'fas fa-sun';
-
-                themeText.textContent =
-                    'Light Mode';
-            }
-        }
+    // Upload zone click.
+    uploadZone.addEventListener(
+        "click",
+        () => fileInput.click()
     );
 
 
-    // Open the file browser.
+    // Drag over.
     uploadZone.addEventListener(
-        'click',
-        () => {
-            fileInput.click();
-        }
-    );
-
-
-    // Highlight the upload area while dragging.
-    uploadZone.addEventListener(
-        'dragover',
-        event => {
+        "dragover",
+        (event) => {
 
             event.preventDefault();
 
             uploadZone.classList.add(
-                'dragover'
+                "dragover"
             );
         }
     );
 
 
+    // Drag leave.
     uploadZone.addEventListener(
-        'dragleave',
+        "dragleave",
         () => {
 
             uploadZone.classList.remove(
-                'dragover'
+                "dragover"
             );
         }
     );
 
 
-    // Handle dropped files.
+    // Drop files.
     uploadZone.addEventListener(
-        'drop',
-        event => {
+        "drop",
+        (event) => {
 
             event.preventDefault();
 
             uploadZone.classList.remove(
-                'dragover'
+                "dragover"
             );
 
             handleFiles(
@@ -910,9 +665,9 @@ document.addEventListener('DOMContentLoaded', () => {
     );
 
 
-    // Handle files selected through the browser.
+    // File picker.
     fileInput.addEventListener(
-        'change',
+        "change",
         () => {
 
             handleFiles(
@@ -922,9 +677,9 @@ document.addEventListener('DOMContentLoaded', () => {
     );
 
 
-    // Send a message when the send button is clicked.
+    // Send message.
     sendBtn.addEventListener(
-        'click',
+        "click",
         () => {
 
             sendMessage(
@@ -934,13 +689,13 @@ document.addEventListener('DOMContentLoaded', () => {
     );
 
 
-    // Send a message when Enter is pressed.
+    // Enter to send.
     userInput.addEventListener(
-        'keydown',
-        event => {
+        "keydown",
+        (event) => {
 
             if (
-                event.key === 'Enter' &&
+                event.key === "Enter" &&
                 !event.shiftKey
             ) {
 
@@ -954,56 +709,84 @@ document.addEventListener('DOMContentLoaded', () => {
     );
 
 
-    // Copy bot responses to the clipboard.
+    // Handle delete and copy buttons.
     document.addEventListener(
-        'click',
-        async event => {
+        "click",
+        async (event) => {
 
-            if (
-                event.target.classList.contains(
-                    'copy-btn'
-                )
-            ) {
+            const deleteButton =
+                event.target.closest(
+                    ".delete-btn"
+                );
 
-                const messageText =
-                    event.target
-                        .closest('.message')
-                        .querySelector(
-                            '.message-text'
-                        )
-                        .innerText;
+
+            if (deleteButton) {
+
+                const filename =
+                    deleteButton.dataset.filename;
+
+
+                if (filename) {
+
+                    await deleteDocument(
+                        filename
+                    );
+                }
+
+                return;
+            }
+
+
+            const copyButton =
+                event.target.closest(
+                    ".copy-btn"
+                );
+
+
+            if (copyButton) {
+
+                const message =
+                    copyButton
+                        .closest(".message")
+                        ?.querySelector(
+                            ".message-text"
+                        );
+
+
+                if (!message) {
+                    return;
+                }
 
 
                 try {
 
                     await navigator.clipboard.writeText(
-                        messageText
+                        message.innerText
                     );
 
 
-                    event.target.classList.replace(
-                        'fa-copy',
-                        'fa-check'
+                    copyButton.classList.replace(
+                        "fa-copy",
+                        "fa-check"
                     );
 
 
                     setTimeout(
                         () => {
 
-                            event.target.classList.replace(
-                                'fa-check',
-                                'fa-copy'
+                            copyButton.classList.replace(
+                                "fa-check",
+                                "fa-copy"
                             );
 
                         },
                         1500
                     );
 
-
                 } catch (error) {
 
                     console.error(
-                        'Copy failed:',
+                        "Copy failed:",
                         error
                     );
                 }
@@ -1012,14 +795,44 @@ document.addEventListener('DOMContentLoaded', () => {
     );
 
 
-    // Show a welcome message.
+    // Theme switch.
+    themeToggle.addEventListener(
+        "change",
+        () => {
+
+            document.body.classList.toggle(
+                "light-theme"
+            );
+
+
+            if (themeToggle.checked) {
+
+                themeIcon.className =
+                    "fas fa-moon";
+
+                themeText.textContent =
+                    "Dark Mode";
+
+            } else {
+
+                themeIcon.className =
+                    "fas fa-sun";
+
+                themeText.textContent =
+                    "Light Mode";
+            }
+        }
+    );
+
+
+    // Initial message.
     addMessage(
-        'bot',
+        "bot",
         "Hello! I'm **Eureka** 💡. Upload documents or ask me anything."
     );
 
 
-    // Load any documents already stored in the current session.
+    // Load existing documents.
     loadDocuments();
 
 });
