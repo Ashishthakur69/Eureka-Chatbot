@@ -1,171 +1,1025 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Remove the loading class to show the app ---
+
     document.body.classList.remove('loading');
 
-    // --- Get references to all necessary HTML elements ---
-    const chatBox = document.getElementById("chat-box");
-    const userInput = document.getElementById("user-input");
+    const chatBox = document.getElementById('chat-box');
+    const userInput = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
+
     const uploadZone = document.getElementById('upload-zone');
     const fileInput = document.getElementById('file-input');
     const fileList = document.getElementById('file-list');
+
+    const documentCount = document.getElementById('document-count');
+    const clearDocumentsBtn = document.getElementById('clear-documents-btn');
+
     const themeToggle = document.getElementById('theme-toggle');
     const themeIcon = document.getElementById('theme-icon');
     const themeText = document.getElementById('theme-text');
 
-    // --- ** NEW STREAMING sendMessage FUNCTION ** ---
-    async function sendMessage(message) {
-        if (!message.trim()) return;
+    const chatStatus = document.getElementById('chat-status');
 
-        addMessage("user", message);
-        userInput.value = "";
-        removeTypingIndicator(); // We don't need the "..." typing indicator anymore
+    const ragStatus = document.getElementById('rag-status');
+    const ragStatusText = document.getElementById('rag-status-text');
 
-        // Create a new, empty message bubble for the bot's response
-        const botMessageDiv = createMessageDiv("bot");
-        const textElement = botMessageDiv.querySelector('.message-text');
-        chatBox.appendChild(botMessageDiv);
-        chatBox.scrollTop = chatBox.scrollHeight;
 
-        try {
-            const response = await fetch("/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message }),
-            });
+    const MAX_DOCUMENTS = 5;
+    const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
-            if (!response.body) {
-                throw new Error("No response body.");
-            }
+    const allowedExtensions = [
+        '.pdf',
+        '.docx'
+    ];
 
-            // Read the response as a stream
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let fullText = '';
 
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
+    // Update the small status shown in the chat header.
+    function setChatStatus(text, busy = false) {
 
-                // Append the new chunk of text
-                fullText += decoder.decode(value, { stream: true });
-                // Update the message bubble with the Markdown-parsed text
-                textElement.innerHTML = marked.parse(fullText + '▋'); // Add a cursor effect
+        chatStatus.classList.toggle(
+            'busy',
+            busy
+        );
 
-                // Smart scroll
-                const isScrolledToBottom = chatBox.scrollHeight - chatBox.clientHeight <= chatBox.scrollTop + 20;
-                if (isScrolledToBottom) {
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                }
-            }
-            // Final update to remove the cursor
-            textElement.innerHTML = marked.parse(fullText);
+        const dot = chatStatus.querySelector(
+            '.status-dot'
+        );
 
-        } catch (err) {
-            textElement.innerHTML = marked.parse(`❌ Connection error: Could not reach the server. 😞`);
-            console.error(err);
+        if (dot) {
+            dot.style.backgroundColor = busy
+                ? 'var(--warning-color)'
+                : 'var(--success-color)';
+        }
+
+        chatStatus.lastChild.textContent = ` ${text}`;
+    }
+
+
+    // Show or hide the RAG status message.
+    function setRagStatus(visible, text = '') {
+
+        ragStatus.classList.toggle(
+            'hidden',
+            !visible
+        );
+
+        if (text) {
+            ragStatusText.textContent = text;
         }
     }
-    
-    // Helper function to create a message structure
+
+
+    // Create a chat message element.
     function createMessageDiv(sender) {
+
         const messageDiv = document.createElement('div');
+
         messageDiv.className = `message ${sender}`;
-        messageDiv.innerHTML = `<div class="message-text"></div>`;
+
+        const textElement = document.createElement('div');
+
+        textElement.className = 'message-text';
+
+        messageDiv.appendChild(textElement);
+
         return messageDiv;
     }
 
 
-    // --- (The rest of the script remains largely the same) ---
+    // Add a normal message to the chat.
     function addMessage(sender, text) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${sender}`;
-        const formattedText = sender === 'bot' ? marked.parse(text) : text;
-        
-        messageDiv.innerHTML = formattedText;
+
+        const messageDiv = createMessageDiv(sender);
+
+        const textElement = messageDiv.querySelector(
+            '.message-text'
+        );
+
         if (sender === 'bot') {
+            textElement.innerHTML = marked.parse(text);
+        } else {
+            textElement.textContent = text;
+        }
+
+        if (sender === 'bot') {
+
             const copyBtn = document.createElement('i');
-            copyBtn.className = 'fas fa-copy copy-btn';
+
+            copyBtn.className =
+                'fas fa-copy copy-btn';
+
             copyBtn.title = 'Copy text';
+
             messageDiv.appendChild(copyBtn);
         }
+
         chatBox.appendChild(messageDiv);
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-    
-    // We no longer need showTypingIndicator or removeTypingIndicator
-    const showTypingIndicator = () => {};
-    const removeTypingIndicator = () => {};
 
-    // All other functions and event listeners
-    themeToggle.addEventListener('change', () => {
-        document.body.classList.toggle('light-theme');
+        chatBox.scrollTop =
+            chatBox.scrollHeight;
+    }
 
-        if (themeToggle.checked) {
-            // If the checkbox is checked, it's Light Mode
-            themeIcon.className = 'fas fa-moon';
-            themeText.textContent = 'Dark Mode ';
-        } else {
-            // If it's not checked, it's Dark Mode
-            themeIcon.className = 'fas fa-sun';
-            themeText.textContent = 'Light Mode ';
+
+    // Format the source section returned by the backend.
+    function formatBotResponse(text) {
+
+        const sourceMarker = '\n\nSources:\n';
+
+        if (!text.includes(sourceMarker)) {
+            return marked.parse(text);
         }
-    });
-    function handleFiles(files) {
-        if (fileList.querySelector('.file-item')) { alert("Please remove the current document before uploading a new one. ☝️"); return; }
-        if (files.length > 1) { alert("You can only upload one document at a time. ☝️"); return; }
-        const file = files[0];
-        const allowedFileTypes = ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-        if (!allowedFileTypes.includes(file.type)) { alert(`Unsupported file type: ${file.name} 🚫. Please upload a PDF, TXT, or DOCX file. 📄`); return; }
-        fileList.querySelector('.no-files').style.display = 'none';
-        displayFile(file);
-        uploadFile(file);
-    }
-    function displayFile(file) {
-        const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
-        fileItem.innerHTML = `<span><i class="fas fa-file-alt"></i> ${file.name}</span><span class="file-status">Uploading ⏳...</span><i class="fas fa-trash delete-btn" title="Remove file"></i>`;
-        fileList.appendChild(fileItem);
-    }
-    async function uploadFile(file) {
-        const formData = new FormData();
-        formData.append('file', file);
-        const fileStatusSpan = fileList.querySelector('.file-item:last-child .file-status');
-        fileStatusSpan.textContent = 'Processing... ⚙️';
-        fileStatusSpan.classList.add('processing');
-        try {
-            const response = await fetch("/upload", { method: "POST", body: formData });
-            const data = await response.json();
-            if (response.ok && data.success) { 
-                fileStatusSpan.textContent = 'Ready ✅'; 
-                fileStatusSpan.classList.remove('processing');
-            }
-            else { throw new Error(data.error || 'Upload failed'); }
-        } catch (error) {
-            fileStatusSpan.textContent = 'Error ❌';
-            fileStatusSpan.classList.remove('processing');
-            console.error('Upload Error:', error);
-        }
-    }
-    uploadZone.addEventListener('click', () => fileInput.click());
-    uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); });
-    uploadZone.addEventListener('drop', (e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); });
-    fileInput.addEventListener('change', () => handleFiles(fileInput.files));
-    sendBtn.addEventListener('click', () => sendMessage(userInput.value));
-    userInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') sendMessage(userInput.value); });
-    document.addEventListener('click', async (e) => {
-        if (e.target.classList.contains('delete-btn')) {
-            await fetch('/clear_document', { method: 'POST' });
-            e.target.parentElement.remove();
-            if (!fileList.querySelector('.file-item')) { fileList.querySelector('.no-files').style.display = 'block'; }
-        }
-        if (e.target.classList.contains('copy-btn')) {
-            const messageText = e.target.parentElement.textContent;
-            navigator.clipboard.writeText(messageText).then(() => {
-                e.target.classList.replace('fa-copy', 'fa-check');
-                setTimeout(() => e.target.classList.replace('fa-check', 'fa-copy'), 1500);
+
+        const parts = text.split(
+            sourceMarker
+        );
+
+        const answer = parts[0];
+
+        const sourceText = parts[1] || '';
+
+        const sources = sourceText
+            .split('\n')
+            .map(source => source.trim())
+            .filter(source => source.startsWith('•'));
+
+        let html = marked.parse(answer);
+
+        if (sources.length) {
+
+            html += `
+                <div class="sources">
+                    <div class="sources-title">
+                        <i class="fas fa-book-open"></i>
+                        Sources
+                    </div>
+            `;
+
+            sources.forEach(source => {
+
+                const cleanSource =
+                    source.replace(/^•\s*/, '');
+
+                html += `
+                    <div class="source-item">
+                        <i class="fas fa-file-lines"></i>
+                        ${escapeHtml(cleanSource)}
+                    </div>
+                `;
             });
+
+            html += '</div>';
         }
-    });
-    addMessage("bot", "Hello! I'm **Eureka** 💡. Upload a document or ask me anything.");
+
+        return html;
+    }
+
+
+    // Keep source filenames safe when adding them to the page.
+    function escapeHtml(text) {
+
+        const div =
+            document.createElement('div');
+
+        div.textContent = text;
+
+        return div.innerHTML;
+    }
+
+
+    // Send a message to the backend.
+    async function sendMessage(message) {
+
+        if (!message.trim()) {
+            return;
+        }
+
+        addMessage(
+            'user',
+            message
+        );
+
+        userInput.value = '';
+
+        sendBtn.disabled = true;
+
+        setChatStatus(
+            'Thinking...',
+            true
+        );
+
+        const botMessageDiv =
+            createMessageDiv('bot');
+
+        const textElement =
+            botMessageDiv.querySelector(
+                '.message-text'
+            );
+
+        chatBox.appendChild(
+            botMessageDiv
+        );
+
+        chatBox.scrollTop =
+            chatBox.scrollHeight;
+
+        try {
+
+            const response = await fetch(
+                '/chat',
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body: JSON.stringify({
+                        message
+                    })
+                }
+            );
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    `Server returned ${response.status}`
+                );
+            }
+
+
+            if (!response.body) {
+
+                throw new Error(
+                    'No response body.'
+                );
+            }
+
+
+            const reader =
+                response.body.getReader();
+
+            const decoder =
+                new TextDecoder();
+
+            let fullText = '';
+
+
+            while (true) {
+
+                const {
+                    value,
+                    done
+                } = await reader.read();
+
+
+                if (done) {
+                    break;
+                }
+
+
+                fullText += decoder.decode(
+                    value,
+                    {
+                        stream: true
+                    }
+                );
+
+
+                textElement.innerHTML =
+                    formatBotResponse(
+                        fullText + '▋'
+                    );
+
+
+                const isScrolledToBottom =
+                    chatBox.scrollHeight -
+                    chatBox.clientHeight <=
+                    chatBox.scrollTop + 40;
+
+
+                if (isScrolledToBottom) {
+
+                    chatBox.scrollTop =
+                        chatBox.scrollHeight;
+                }
+            }
+
+
+            textElement.innerHTML =
+                formatBotResponse(
+                    fullText
+                );
+
+
+        } catch (error) {
+
+            console.error(
+                'Chat error:',
+                error
+            );
+
+            textElement.innerHTML =
+                marked.parse(
+                    '❌ I could not connect to the server. Please try again.'
+                );
+
+        } finally {
+
+            sendBtn.disabled = false;
+
+            setChatStatus(
+                'Ready',
+                false
+            );
+
+            userInput.focus();
+        }
+    }
+
+
+    // Display one uploaded document in the sidebar.
+    function displayFile(
+        filename,
+        status = 'Ready',
+        statusClass = 'ready'
+    ) {
+
+        const existing =
+            [...fileList.querySelectorAll(
+                '.file-item'
+            )].find(
+                item =>
+                    item.dataset.filename === filename
+            );
+
+
+        if (existing) {
+
+            const statusElement =
+                existing.querySelector(
+                    '.file-status'
+                );
+
+            statusElement.textContent =
+                status;
+
+            statusElement.className =
+                `file-status ${statusClass}`;
+
+            return existing;
+        }
+
+
+        const noFiles =
+            fileList.querySelector(
+                '.no-files'
+            );
+
+
+        if (noFiles) {
+            noFiles.style.display = 'none';
+        }
+
+
+        const fileItem =
+            document.createElement('div');
+
+
+        fileItem.className =
+            'file-item';
+
+
+        fileItem.dataset.filename =
+            filename;
+
+
+        fileItem.innerHTML = `
+            <div class="file-item-info">
+                <i class="fas fa-file-lines"></i>
+
+                <span
+                    class="file-name"
+                    title="${escapeHtml(filename)}"
+                >
+                    ${escapeHtml(filename)}
+                </span>
+            </div>
+
+            <span class="file-status ${statusClass}">
+                ${status}
+            </span>
+        `;
+
+
+        fileList.appendChild(
+            fileItem
+        );
+
+
+        return fileItem;
+    }
+
+
+    // Update the document counter.
+    function updateDocumentCount(count) {
+
+        documentCount.textContent =
+            `${count} / ${MAX_DOCUMENTS}`;
+
+
+        clearDocumentsBtn.disabled =
+            count === 0;
+    }
+
+
+    // Refresh the sidebar from the backend.
+    async function loadDocuments() {
+
+        try {
+
+            const response =
+                await fetch(
+                    '/documents'
+                );
+
+
+            if (!response.ok) {
+                return;
+            }
+
+
+            const data =
+                await response.json();
+
+
+            fileList.innerHTML = '';
+
+
+            if (
+                !data.documents ||
+                data.documents.length === 0
+            ) {
+
+                fileList.innerHTML = `
+                    <p class="no-files">
+                        📪 No documents uploaded yet.
+                    </p>
+                `;
+
+            } else {
+
+                data.documents.forEach(
+                    filename => {
+
+                        displayFile(
+                            filename,
+                            'Ready',
+                            'ready'
+                        );
+                    }
+                );
+            }
+
+
+            updateDocumentCount(
+                data.count || 0
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                'Could not load documents:',
+                error
+            );
+        }
+    }
+
+
+    // Check a selected file before uploading it.
+    function validateFile(file) {
+
+        const extension =
+            '.' +
+            file.name
+                .split('.')
+                .pop()
+                .toLowerCase();
+
+
+        if (!allowedExtensions.includes(
+            extension
+        )) {
+
+            alert(
+                'Unsupported file type. Please upload a PDF or DOCX file.'
+            );
+
+            return false;
+        }
+
+
+        if (file.size > MAX_FILE_SIZE) {
+
+            alert(
+                `${file.name} is larger than 25 MB. Please choose a smaller file.`
+            );
+
+            return false;
+        }
+
+
+        return true;
+    }
+
+
+    // Upload one file to the backend.
+    async function uploadFile(file) {
+
+        const fileItem =
+            displayFile(
+                file.name,
+                'Uploading...',
+                'processing'
+            );
+
+
+        try {
+
+            const formData =
+                new FormData();
+
+
+            formData.append(
+                'file',
+                file
+            );
+
+
+            const response =
+                await fetch(
+                    '/upload',
+                    {
+                        method: 'POST',
+                        body: formData
+                    }
+                );
+
+
+            let data = {};
+
+            try {
+                data =
+                    await response.json();
+            } catch {
+                data = {};
+            }
+
+
+            if (
+                response.ok &&
+                data.success
+            ) {
+
+                const statusElement =
+                    fileItem.querySelector(
+                        '.file-status'
+                    );
+
+
+                statusElement.textContent =
+                    'Ready ✓';
+
+
+                statusElement.className =
+                    'file-status ready';
+
+
+                updateDocumentCount(
+                    data.document_count
+                );
+
+
+                setChatStatus(
+                    'Documents ready',
+                    false
+                );
+
+
+            } else {
+
+                throw new Error(
+                    data.error ||
+                    'Upload failed.'
+                );
+            }
+
+
+        } catch (error) {
+
+            console.error(
+                'Upload error:',
+                error
+            );
+
+
+            fileItem.remove();
+
+
+            const remainingFiles =
+                fileList.querySelectorAll(
+                    '.file-item'
+                ).length;
+
+
+            if (remainingFiles === 0) {
+
+                fileList.innerHTML = `
+                    <p class="no-files">
+                        📪 No documents uploaded yet.
+                    </p>
+                `;
+            }
+
+
+            alert(
+                `${file.name}: ${error.message}`
+            );
+
+
+            await loadDocuments();
+        }
+    }
+
+
+    // Handle selected or dropped files.
+    async function handleFiles(files) {
+
+        const selectedFiles =
+            Array.from(files);
+
+
+        if (!selectedFiles.length) {
+            return;
+        }
+
+
+        const currentCount =
+            fileList.querySelectorAll(
+                '.file-item'
+            ).length;
+
+
+        const availableSlots =
+            MAX_DOCUMENTS -
+            currentCount;
+
+
+        if (availableSlots <= 0) {
+
+            alert(
+                `You can upload a maximum of ${MAX_DOCUMENTS} documents.`
+            );
+
+            return;
+        }
+
+
+        const filesToUpload =
+            selectedFiles.slice(
+                0,
+                availableSlots
+            );
+
+
+        if (
+            selectedFiles.length >
+            availableSlots
+        ) {
+
+            alert(
+                `Only ${availableSlots} more document(s) can be uploaded.`
+            );
+        }
+
+
+        for (const file of filesToUpload) {
+
+            if (!validateFile(file)) {
+                continue;
+            }
+
+
+            const alreadyUploaded =
+                [...fileList.querySelectorAll(
+                    '.file-item'
+                )].some(
+                    item =>
+                        item.dataset.filename ===
+                        file.name
+                );
+
+
+            if (alreadyUploaded) {
+
+                alert(
+                    `${file.name} is already uploaded.`
+                );
+
+                continue;
+            }
+
+
+            await uploadFile(file);
+        }
+
+
+        fileInput.value = '';
+
+        await loadDocuments();
+    }
+
+
+    // Clear the complete document collection.
+    async function clearDocuments() {
+
+        const confirmed =
+            confirm(
+                'Remove all uploaded documents?'
+            );
+
+
+        if (!confirmed) {
+            return;
+        }
+
+
+        clearDocumentsBtn.disabled =
+            true;
+
+
+        try {
+
+            const response =
+                await fetch(
+                    '/clear_document',
+                    {
+                        method: 'POST'
+                    }
+                );
+
+
+            const data =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.error ||
+                    'Could not clear documents.'
+                );
+            }
+
+
+            fileList.innerHTML = `
+                <p class="no-files">
+                    📪 No documents uploaded yet.
+                </p>
+            `;
+
+
+            updateDocumentCount(0);
+
+
+            setRagStatus(
+                false
+            );
+
+
+            setChatStatus(
+                'Ready',
+                false
+            );
+
+
+            addMessage(
+                'bot',
+                'Document context cleared. You can upload new documents or ask me anything.'
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                'Clear documents error:',
+                error
+            );
+
+
+            alert(
+                error.message
+            );
+
+
+            await loadDocuments();
+        }
+    }
+
+
+    // Switch between dark and light themes.
+    themeToggle.addEventListener(
+        'change',
+        () => {
+
+            document.body.classList.toggle(
+                'light-theme'
+            );
+
+
+            if (themeToggle.checked) {
+
+                themeIcon.className =
+                    'fas fa-moon';
+
+                themeText.textContent =
+                    'Dark Mode';
+
+            } else {
+
+                themeIcon.className =
+                    'fas fa-sun';
+
+                themeText.textContent =
+                    'Light Mode';
+            }
+        }
+    );
+
+
+    // Open the file browser.
+    uploadZone.addEventListener(
+        'click',
+        () => {
+            fileInput.click();
+        }
+    );
+
+
+    // Highlight the upload area while dragging.
+    uploadZone.addEventListener(
+        'dragover',
+        event => {
+
+            event.preventDefault();
+
+            uploadZone.classList.add(
+                'dragover'
+            );
+        }
+    );
+
+
+    uploadZone.addEventListener(
+        'dragleave',
+        () => {
+
+            uploadZone.classList.remove(
+                'dragover'
+            );
+        }
+    );
+
+
+    // Handle dropped files.
+    uploadZone.addEventListener(
+        'drop',
+        event => {
+
+            event.preventDefault();
+
+            uploadZone.classList.remove(
+                'dragover'
+            );
+
+            handleFiles(
+                event.dataTransfer.files
+            );
+        }
+    );
+
+
+    // Handle files selected through the browser.
+    fileInput.addEventListener(
+        'change',
+        () => {
+
+            handleFiles(
+                fileInput.files
+            );
+        }
+    );
+
+
+    // Send a message when the send button is clicked.
+    sendBtn.addEventListener(
+        'click',
+        () => {
+
+            sendMessage(
+                userInput.value
+            );
+        }
+    );
+
+
+    // Send a message when Enter is pressed.
+    userInput.addEventListener(
+        'keydown',
+        event => {
+
+            if (
+                event.key === 'Enter' &&
+                !event.shiftKey
+            ) {
+
+                event.preventDefault();
+
+                sendMessage(
+                    userInput.value
+                );
+            }
+        }
+    );
+
+
+    // Copy bot responses to the clipboard.
+    document.addEventListener(
+        'click',
+        async event => {
+
+            if (
+                event.target.classList.contains(
+                    'copy-btn'
+                )
+            ) {
+
+                const messageText =
+                    event.target
+                        .closest('.message')
+                        .querySelector(
+                            '.message-text'
+                        )
+                        .innerText;
+
+
+                try {
+
+                    await navigator.clipboard.writeText(
+                        messageText
+                    );
+
+
+                    event.target.classList.replace(
+                        'fa-copy',
+                        'fa-check'
+                    );
+
+
+                    setTimeout(
+                        () => {
+
+                            event.target.classList.replace(
+                                'fa-check',
+                                'fa-copy'
+                            );
+
+                        },
+                        1500
+                    );
+
+
+                } catch (error) {
+
+                    console.error(
+                        'Copy failed:',
+                        error
+                    );
+                }
+            }
+        }
+    );
+
+
+    // Show a welcome message.
+    addMessage(
+        'bot',
+        "Hello! I'm **Eureka** 💡. Upload documents or ask me anything."
+    );
+
+
+    // Load any documents already stored in the current session.
+    loadDocuments();
+
 });
