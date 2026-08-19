@@ -3,7 +3,7 @@ from flask_cors import CORS
 
 import os
 import traceback
-
+from typing import ClassVar
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 
@@ -85,7 +85,7 @@ except Exception as e:
 # Keep only the most recent five conversations.
 class WindowedChatMessageHistory(ChatMessageHistory):
 
-    k = 5
+    k: ClassVar[int] = 5
 
     def add_message(self, message: BaseMessage) -> None:
         super().add_message(message)
