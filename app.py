@@ -23,7 +23,7 @@ from langchain_community.tools import DuckDuckGoSearchRun
 
 load_dotenv()
 
-# Create the folder used for temporary uploaded files.
+# Create the temporary upload folder.
 os.makedirs("uploads", exist_ok=True)
 
 app = Flask(
@@ -34,23 +34,24 @@ app = Flask(
 
 app.config["UPLOAD_FOLDER"] = "uploads"
 
-# Limit each uploaded file to 25 MB.
+# Maximum size of one uploaded file.
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
 CORS(app)
 
 
-# Maximum number of documents that can be active at once.
+# Maximum number of documents in one session.
 MAX_DOCUMENTS = 5
 
 
-# Load the Groq API key from the environment.
+# Load Groq API key.
 groq_api_key = os.getenv("GROQ_API_KEY")
 
 if not groq_api_key:
     print("Warning: GROQ_API_KEY is not configured.")
 
 
+# Initialize Groq.
 try:
     llm = ChatGroq(
         model="openai/gpt-oss-120b",
@@ -65,7 +66,7 @@ except Exception as e:
     llm = None
 
 
-# Initialize DuckDuckGo for questions that need current information.
+# Initialize DuckDuckGo search.
 try:
     search_tool = DuckDuckGoSearchRun()
     print("DuckDuckGo search ready.")
@@ -102,27 +103,43 @@ class WindowedChatMessageHistory(ChatMessageHistory):
             self.messages = self.messages[-(self.k * 2):]
 
 
-# Store the conversation, vector database and uploaded file names.
+# Store everything belonging to the current session.
 class SessionState:
 
     def __init__(self):
         self.history = WindowedChatMessageHistory()
+
+        # Current FAISS database.
         self.vectorstore = None
+
+        # RAG function.
         self.rag_chain = None
+
+        # List of uploaded filenames.
         self.documents = []
+
+        # Store chunks separately for every document.
+        #
+        # Example:
+        # {
+        #     "resume.pdf": [chunk1, chunk2, ...],
+        #     "paper.pdf": [chunk1, chunk2, ...]
+        # }
+        self.document_chunks = {}
 
 
 store = {}
 
 
 def get_session_state(session_id):
+
     if session_id not in store:
         store[session_id] = SessionState()
 
     return store[session_id]
 
 
-# Decide whether a question is likely to need a web search.
+# Decide whether a question needs web search.
 def needs_web_search(user_message):
 
     search_keywords = [
@@ -166,24 +183,21 @@ def needs_web_search(user_message):
     )
 
 
-# Handle normal conversations when no document is being used.
+# Normal chatbot mode.
 def run_normal_chat(user_message, session_state):
 
     try:
+
         if llm is None:
             return "The AI model is currently unavailable."
 
         messages = [
             SystemMessage(
                 content=(
-                    "You are Eureka, a helpful and "
-                    "knowledgeable AI assistant.\n\n"
-                    "Answer general questions using your "
-                    "own knowledge.\n\n"
-                    "When web search results are provided, "
-                    "use them for current information.\n\n"
-                    "Do not present information as current "
-                    "unless it is supported by the search results."
+                    "You are Eureka, a helpful and knowledgeable AI assistant.\n\n"
+                    "Answer general questions using your own knowledge.\n\n"
+                    "When web search results are provided, use them for current information.\n\n"
+                    "Do not present information as current unless it is supported by the search results."
                 )
             )
         ]
@@ -192,7 +206,7 @@ def run_normal_chat(user_message, session_state):
             session_state.history.messages
         )
 
-        # Search the web only when the question appears time-sensitive.
+        # Search only when the question appears time-sensitive.
         if (
             needs_web_search(user_message)
             and search_tool is not None
@@ -201,12 +215,15 @@ def run_normal_chat(user_message, session_state):
             print("Searching DuckDuckGo...")
 
             try:
+
                 search_results = search_tool.invoke(
                     user_message
                 )
 
             except Exception as e:
+
                 print(f"Search failed: {e}")
+
                 search_results = "Web search was unavailable."
 
             messages.append(
@@ -216,10 +233,8 @@ def run_normal_chat(user_message, session_state):
                         f"{user_message}\n\n"
                         f"Search results:\n"
                         f"{search_results}\n\n"
-                        "Answer the user's question using "
-                        "the search results above. Do not "
-                        "make up information that is not "
-                        "supported by them."
+                        "Answer the user's question using the search results above. "
+                        "Do not make up information that is not supported by them."
                     )
                 )
             )
@@ -237,6 +252,7 @@ def run_normal_chat(user_message, session_state):
         answer = response.content
 
         if isinstance(answer, list):
+
             answer = "\n".join(
                 str(item)
                 for item in answer
@@ -255,11 +271,13 @@ def run_normal_chat(user_message, session_state):
         return answer
 
     except Exception as e:
+
         traceback.print_exc()
+
         return f"Error while generating response: {str(e)}"
 
 
-# Create the RAG function used for the current document collection.
+# Create the RAG function.
 def create_rag_chain(vectorstore):
 
     retriever = vectorstore.as_retriever(
@@ -274,18 +292,12 @@ def create_rag_chain(vectorstore):
                 "system",
                 (
                     "You are Eureka, a helpful AI assistant.\n\n"
-                    "Answer the user's question using the "
-                    "provided document context.\n\n"
-                    "Use the documents as the primary source "
-                    "and do not invent information.\n\n"
-                    "The context may contain information "
-                    "from several different documents. "
-                    "Combine information from them when "
-                    "necessary to answer the question.\n\n"
-                    "If the answer cannot be found in the "
-                    "provided documents, clearly say that "
-                    "the information is not available "
-                    "in the uploaded documents."
+                    "Answer the user's question using the provided document context.\n\n"
+                    "Use the documents as the primary source and do not invent information.\n\n"
+                    "The context may contain information from several different documents. "
+                    "Combine information from them when necessary to answer the question.\n\n"
+                    "If the answer cannot be found in the provided documents, clearly say "
+                    "that the information is not available in the uploaded documents."
                 )
             ),
             (
@@ -302,138 +314,177 @@ def create_rag_chain(vectorstore):
 
     def answer_question(question):
 
-        # Retrieve the most relevant chunks from all uploaded documents.
-        documents = retriever.invoke(question)
+        try:
 
-        if not documents:
+            documents = retriever.invoke(question)
+
+            if not documents:
+
+                return {
+                    "answer": (
+                        "I couldn't find relevant information "
+                        "in the uploaded documents."
+                    ),
+                    "sources": []
+                }
+
+            context_parts = []
+
+            for document in documents:
+
+                source_path = document.metadata.get(
+                    "source",
+                    "Unknown document"
+                )
+
+                filename = os.path.basename(
+                    source_path
+                )
+
+                page = document.metadata.get(
+                    "page"
+                )
+
+                if page is not None:
+
+                    source_label = (
+                        f"{filename} - Page {page + 1}"
+                    )
+
+                else:
+
+                    source_label = filename
+
+                context_parts.append(
+                    f"Source: {source_label}\n"
+                    f"{document.page_content}"
+                )
+
+            context = "\n\n---\n\n".join(
+                context_parts
+            )
+
+            messages = prompt.invoke(
+                {
+                    "context": context,
+                    "question": question
+                }
+            )
+
+            response = llm.invoke(messages)
+
+            answer = response.content
+
+            if isinstance(answer, list):
+
+                answer = "\n".join(
+                    str(item)
+                    for item in answer
+                )
+
+            # Collect unique sources.
+            sources = []
+
+            for document in documents:
+
+                source_path = document.metadata.get(
+                    "source",
+                    "Unknown document"
+                )
+
+                filename = os.path.basename(
+                    source_path
+                )
+
+                page = document.metadata.get(
+                    "page"
+                )
+
+                if page is not None:
+
+                    page_number = page + 1
+
+                    label = (
+                        f"{filename} - Page {page_number}"
+                    )
+
+                else:
+
+                    page_number = None
+
+                    label = filename
+
+                source = {
+                    "file": filename,
+                    "page": page_number,
+                    "label": label
+                }
+
+                if source not in sources:
+                    sources.append(source)
+
             return {
-                "answer": (
-                    "I couldn't find relevant information "
-                    "in the uploaded documents."
-                ),
+                "answer": str(answer),
+                "sources": sources
+            }
+
+        except Exception as e:
+
+            traceback.print_exc()
+
+            return {
+                "answer": f"Error while searching documents: {str(e)}",
                 "sources": []
             }
-
-        # Combine the retrieved chunks into the context for the LLM.
-        context_parts = []
-
-        for document in documents:
-
-            source_path = document.metadata.get(
-                "source",
-                "Unknown document"
-            )
-
-            filename = os.path.basename(
-                source_path
-            )
-
-            page = document.metadata.get(
-                "page"
-            )
-
-            if page is not None:
-                source_label = (
-                    f"{filename} - Page {page + 1}"
-                )
-            else:
-                source_label = filename
-
-            context_parts.append(
-                f"Source: {source_label}\n"
-                f"{document.page_content}"
-            )
-
-        context = "\n\n---\n\n".join(
-            context_parts
-        )
-
-        messages = prompt.invoke(
-            {
-                "context": context,
-                "question": question
-            }
-        )
-
-        response = llm.invoke(messages)
-
-        answer = response.content
-
-        if isinstance(answer, list):
-            answer = "\n".join(
-                str(item)
-                for item in answer
-            )
-
-        # Collect unique sources used for the answer.
-        sources = []
-
-        for document in documents:
-
-            source_path = document.metadata.get(
-                "source",
-                "Unknown document"
-            )
-
-            filename = os.path.basename(
-                source_path
-            )
-
-            page = document.metadata.get(
-                "page"
-            )
-
-            if page is not None:
-                page_number = page + 1
-                label = (
-                    f"{filename} - Page {page_number}"
-                )
-            else:
-                page_number = None
-                label = filename
-
-            source = {
-                "file": filename,
-                "page": page_number,
-                "label": label
-            }
-
-            if source not in sources:
-                sources.append(source)
-
-        return {
-            "answer": str(answer),
-            "sources": sources
-        }
 
     return answer_question
 
 
-# Create or update the RAG index with a new document.
-def add_document_to_vectorstore(
-    session_state,
-    chunks
-):
+# Rebuild the FAISS database from all active documents.
+def rebuild_vectorstore(session_state):
 
-    if session_state.vectorstore is None:
-
-        session_state.vectorstore = FAISS.from_documents(
-            documents=chunks,
-            embedding=embeddings
+    if embeddings is None:
+        raise RuntimeError(
+            "Embedding model is not available."
         )
 
-    else:
+    all_chunks = []
 
-        session_state.vectorstore.add_documents(
-            chunks
+    for filename in session_state.documents:
+
+        chunks = session_state.document_chunks.get(
+            filename,
+            []
         )
+
+        all_chunks.extend(chunks)
+
+    # No documents remain.
+    if not all_chunks:
+
+        session_state.vectorstore = None
+        session_state.rag_chain = None
+
+        return
+
+    print(
+        f"Rebuilding FAISS index using "
+        f"{len(all_chunks)} chunks..."
+    )
+
+    session_state.vectorstore = FAISS.from_documents(
+        documents=all_chunks,
+        embedding=embeddings
+    )
 
     session_state.rag_chain = create_rag_chain(
         session_state.vectorstore
     )
 
+    print("FAISS index rebuilt successfully.")
 
-# Upload a PDF or DOCX file and add it to the current collection.
+
+# Upload a new PDF or DOCX document.
 @app.route("/upload", methods=["POST"])
 def upload_file():
 
@@ -442,13 +493,14 @@ def upload_file():
     )
 
     if embeddings is None:
+
         return jsonify(
             {
                 "error": "Embedding model is not available."
             }
         ), 500
 
-    # Check the number of documents already uploaded.
+    # Check maximum number of documents.
     if len(session_state.documents) >= MAX_DOCUMENTS:
 
         return jsonify(
@@ -461,6 +513,7 @@ def upload_file():
         ), 400
 
     if "file" not in request.files:
+
         return jsonify(
             {
                 "error": "No file was uploaded."
@@ -470,6 +523,7 @@ def upload_file():
     file = request.files["file"]
 
     if not file.filename:
+
         return jsonify(
             {
                 "error": "No file was selected."
@@ -480,7 +534,7 @@ def upload_file():
         file.filename
     )
 
-    # Prevent uploading the same filename twice.
+    # Prevent duplicate filenames.
     if filename in session_state.documents:
 
         return jsonify(
@@ -500,7 +554,7 @@ def upload_file():
 
     try:
 
-        # Choose the loader based on the file type.
+        # Select the correct document loader.
         if filename.lower().endswith(".pdf"):
 
             loader = PyPDFLoader(filepath)
@@ -541,7 +595,7 @@ def upload_file():
             f"Loaded {len(documents)} pages from {filename}."
         )
 
-        # Split the document into smaller chunks for retrieval.
+        # Split the document into smaller chunks.
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200
@@ -564,8 +618,7 @@ def upload_file():
                 }
             ), 400
 
-        # Add the filename to every chunk so citations
-        # continue to work after documents are combined.
+        # Store the filename in every chunk.
         for chunk in chunks:
 
             chunk.metadata["source"] = filename
@@ -574,18 +627,21 @@ def upload_file():
             f"Created {len(chunks)} chunks from {filename}."
         )
 
-        # Add the new chunks to the existing FAISS index.
-        add_document_to_vectorstore(
-            session_state,
-            chunks
-        )
+        # Store chunks separately for this document.
+        session_state.document_chunks[filename] = chunks
 
+        # Add the filename to the active documents list.
         session_state.documents.append(
             filename
         )
 
-        # Clear previous conversation when the document
-        # collection changes.
+        # Rebuild the FAISS database.
+        rebuild_vectorstore(
+            session_state
+        )
+
+        # Clear previous conversation because
+        # the document collection has changed.
         session_state.history.clear()
 
         os.remove(filepath)
@@ -607,8 +663,22 @@ def upload_file():
 
         traceback.print_exc()
 
+        # Remove temporary uploaded file.
         if os.path.exists(filepath):
+
             os.remove(filepath)
+
+        # Remove partially stored document data.
+        session_state.document_chunks.pop(
+            filename,
+            None
+        )
+
+        if filename in session_state.documents:
+
+            session_state.documents.remove(
+                filename
+            )
 
         return jsonify(
             {
@@ -618,11 +688,8 @@ def upload_file():
         ), 500
 
 
-# Return the list of currently uploaded documents.
-@app.route(
-    "/documents",
-    methods=["GET"]
-)
+# Return the currently uploaded documents.
+@app.route("/documents", methods=["GET"])
 def get_documents():
 
     session_state = get_session_state(
@@ -640,11 +707,105 @@ def get_documents():
     ), 200
 
 
-# Remove all uploaded documents and reset the FAISS index.
-@app.route(
-    "/clear_document",
-    methods=["POST"]
-)
+# Delete one specific document.
+@app.route("/delete_document", methods=["POST"])
+def delete_document():
+
+    session_state = get_session_state(
+        "user_session_123"
+    )
+
+    data = request.get_json(
+        silent=True
+    ) or {}
+
+    filename = data.get(
+        "filename"
+    )
+
+    if not filename:
+
+        return jsonify(
+            {
+                "error": "No document name was provided."
+            }
+        ), 400
+
+    filename = secure_filename(
+        filename
+    )
+
+    # Check whether the document exists.
+    if filename not in session_state.documents:
+
+        return jsonify(
+            {
+                "error": (
+                    f"'{filename}' is not currently uploaded."
+                )
+            }
+        ), 404
+
+    try:
+
+        print(
+            f"Deleting document: {filename}"
+        )
+
+        # Remove the document's chunks.
+        session_state.document_chunks.pop(
+            filename,
+            None
+        )
+
+        # Remove the filename from the active list.
+        session_state.documents.remove(
+            filename
+        )
+
+        # Rebuild FAISS using only the remaining documents.
+        rebuild_vectorstore(
+            session_state
+        )
+
+        # Clear conversation history because
+        # the available document context changed.
+        session_state.history.clear()
+
+        print(
+            f"Document deleted: {filename}"
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "message": (
+                    f"'{filename}' was deleted successfully."
+                ),
+                "documents": session_state.documents,
+                "document_count": len(
+                    session_state.documents
+                )
+            }
+        ), 200
+
+    except Exception as e:
+
+        traceback.print_exc()
+
+        return jsonify(
+            {
+                "error": (
+                    "Failed to delete the document."
+                ),
+                "details": str(e)
+            }
+        ), 500
+
+
+# Keep this endpoint for compatibility.
+# It can still remove everything if needed.
+@app.route("/clear_document", methods=["POST"])
 def clear_document():
 
     session_state = get_session_state(
@@ -653,7 +814,10 @@ def clear_document():
 
     session_state.vectorstore = None
     session_state.rag_chain = None
+
     session_state.documents.clear()
+    session_state.document_chunks.clear()
+
     session_state.history.clear()
 
     return jsonify(
@@ -665,24 +829,27 @@ def clear_document():
     ), 200
 
 
-# Handle chat messages.
-@app.route(
-    "/chat",
-    methods=["POST"]
-)
+# Chat endpoint.
+@app.route("/chat", methods=["POST"])
 def chat():
 
-    data = request.json
+    data = request.get_json(
+        silent=True
+    )
 
     if not data:
+
         return Response(
             "Error: Invalid JSON request.",
             status=400
         )
 
-    user_message = data.get("message")
+    user_message = data.get(
+        "message"
+    )
 
     if not user_message:
+
         return Response(
             "Error: No message provided.",
             status=400
@@ -696,7 +863,7 @@ def chat():
 
         try:
 
-            # Use RAG when documents have been uploaded.
+            # Use RAG when documents are available.
             if session_state.rag_chain is not None:
 
                 print("Using document RAG.")
@@ -715,7 +882,7 @@ def chat():
                     []
                 )
 
-                # Show the files and pages used for the answer.
+                # Add citations to the answer.
                 if sources:
 
                     answer += "\n\nSources:\n"
