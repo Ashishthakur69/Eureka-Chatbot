@@ -7,71 +7,23 @@ import traceback
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 
-
-# ============================================================
-# LangChain / AI Imports
-# ============================================================
-
 from langchain_groq import ChatGroq
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
 
-from langchain_community.document_loaders import (
-    PyPDFLoader,
-    Docx2txtLoader
-)
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage
 
-from langchain_text_splitters import (
-    RecursiveCharacterTextSplitter
-)
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_community.tools import DuckDuckGoSearchRun
 
-from langchain_huggingface import (
-    HuggingFaceEmbeddings
-)
-
-from langchain_community.vectorstores import (
-    FAISS
-)
-
-from langchain_core.prompts import (
-    ChatPromptTemplate
-)
-
-from langchain_core.output_parsers import (
-    StrOutputParser
-)
-
-from langchain_core.runnables import (
-    RunnablePassthrough
-)
-
-from langchain_core.messages import (
-    BaseMessage,
-    SystemMessage,
-    HumanMessage
-)
-
-from langchain_community.chat_message_histories import (
-    ChatMessageHistory
-)
-
-from langchain_community.tools import (
-    DuckDuckGoSearchRun
-)
-
-
-# ============================================================
-# Load Environment Variables
-# ============================================================
 
 load_dotenv()
 
-
-# ============================================================
-# Flask Setup
-# ============================================================
-
-if not os.path.exists("uploads"):
-    os.makedirs("uploads")
-
+# Create the folder used for temporary uploaded files.
+os.makedirs("uploads", exist_ok=True)
 
 app = Flask(
     __name__,
@@ -84,352 +36,185 @@ app.config["UPLOAD_FOLDER"] = "uploads"
 CORS(app)
 
 
-# ============================================================
-# Groq LLM
-# ============================================================
-
+# Load the Groq API key from the environment.
 groq_api_key = os.getenv("GROQ_API_KEY")
 
-
 if not groq_api_key:
-
-    print(
-        "WARNING: GROQ_API_KEY is not configured."
-    )
+    print("Warning: GROQ_API_KEY is not configured.")
 
 
 try:
-
     llm = ChatGroq(
         model="openai/gpt-oss-120b",
         api_key=groq_api_key,
         temperature=0.2
     )
 
-    print(
-        "--- Groq LLM initialized successfully ---"
-    )
+    print("Groq model loaded.")
 
 except Exception as e:
-
-    print(
-        f"--- ERROR initializing Groq LLM: {e} ---"
-    )
-
+    print(f"Could not initialize Groq: {e}")
     llm = None
 
 
-# ============================================================
-# DuckDuckGo Search
-# ============================================================
-
+# Initialize DuckDuckGo for questions that need current information.
 try:
-
     search_tool = DuckDuckGoSearchRun()
-
-    print(
-        "--- DuckDuckGo search initialized successfully ---"
-    )
+    print("DuckDuckGo search ready.")
 
 except Exception as e:
-
-    print(
-        f"--- ERROR initializing DuckDuckGo: {e} ---"
-    )
-
+    print(f"Could not initialize DuckDuckGo: {e}")
     search_tool = None
 
 
-# ============================================================
-# Hugging Face Embeddings
-# ============================================================
-
-print(
-    "\n--- Initializing HuggingFace Embeddings Model ---"
-)
+# Load the free Hugging Face embedding model.
+print("Loading embedding model...")
 
 try:
-
     embeddings = HuggingFaceEmbeddings(
         model_name="all-MiniLM-L6-v2"
     )
 
-    print(
-        "--- Embeddings Model Loaded Successfully ---\n"
-    )
+    print("Embedding model loaded.")
 
 except Exception as e:
-
-    print(
-        f"--- ERROR: Failed to load embeddings model: {e} ---"
-    )
-
+    print(f"Could not load embedding model: {e}")
     embeddings = None
 
 
-# ============================================================
-# Conversation History
-# ============================================================
-
+# Keep only the most recent five conversations.
 class WindowedChatMessageHistory(ChatMessageHistory):
 
-    k: int = 5
+    k = 5
 
-    def add_message(
-        self,
-        message: BaseMessage
-    ) -> None:
-
+    def add_message(self, message: BaseMessage) -> None:
         super().add_message(message)
 
         if len(self.messages) > self.k * 2:
-
-            self.messages = self.messages[
-                -(self.k * 2):
-            ]
+            self.messages = self.messages[-(self.k * 2):]
 
 
-# ============================================================
-# Session State
-# ============================================================
-
+# Store the current conversation and document context.
 class SessionState:
 
     def __init__(self):
-
         self.history = WindowedChatMessageHistory()
-
         self.rag_chain = None
 
 
 store = {}
 
 
-def get_session_state(
-    session_id: str
-) -> SessionState:
-
+def get_session_state(session_id):
     if session_id not in store:
-
         store[session_id] = SessionState()
 
     return store[session_id]
 
 
-# ============================================================
-# Determine Whether Web Search Is Needed
-# ============================================================
-
-def needs_web_search(
-    user_message: str
-) -> bool:
+# Decide whether a question is likely to need a web search.
+def needs_web_search(user_message):
 
     search_keywords = [
-
-        # Current information
         "latest",
         "recent",
         "today",
         "current",
         "now",
         "live",
-
-        # News
         "news",
         "breaking",
-
-        # Sports
         "score",
         "scores",
         "match",
         "matches",
-        "live score",
         "result",
         "results",
         "standings",
         "schedule",
-
-        # Finance
         "stock",
         "stocks",
         "share price",
         "stock price",
         "market price",
-
-        # Weather
         "weather",
         "forecast",
         "temperature today",
-
-        # Other changing information
         "price",
-        "schedule",
         "release date",
         "released",
         "update",
         "updates",
-
-        # Current year
         "2026"
     ]
 
-
-    message_lower = user_message.lower()
-
+    message = user_message.lower()
 
     return any(
-        keyword in message_lower
+        keyword in message
         for keyword in search_keywords
     )
 
 
-# ============================================================
-# Normal Chat
-# ============================================================
-
-def run_normal_chat(
-    user_message: str,
-    session_state: SessionState
-):
+# Handle normal conversations when no document is uploaded.
+def run_normal_chat(user_message, session_state):
 
     try:
-
         if llm is None:
-
-            return (
-                "The AI model is currently unavailable."
-            )
-
-
-        # ====================================================
-        # System Message
-        # ====================================================
-
-        system_message = SystemMessage(
-            content=(
-                "You are Eureka, a helpful and "
-                "knowledgeable AI assistant.\n\n"
-
-                "Answer questions clearly and accurately.\n\n"
-
-                "Use your own knowledge for general "
-                "questions.\n\n"
-
-                "When web search results are provided, "
-                "use them as the source for current "
-                "information.\n\n"
-
-                "Do not claim information is live or "
-                "current unless it is supported by "
-                "the provided search results."
-            )
-        )
-
-
-        # ====================================================
-        # Conversation History
-        # ====================================================
+            return "The AI model is currently unavailable."
 
         messages = [
-            system_message
+            SystemMessage(
+                content=(
+                    "You are Eureka, a helpful and "
+                    "knowledgeable AI assistant.\n\n"
+                    "Answer general questions using your "
+                    "own knowledge.\n\n"
+                    "When web search results are provided, "
+                    "use them for current information.\n\n"
+                    "Do not present information as current "
+                    "unless it is supported by the search results."
+                )
+            )
         ]
-
 
         messages.extend(
             session_state.history.messages
         )
 
-
-        # ====================================================
-        # Decide Whether Search Is Needed
-        # ====================================================
-
-        search_required = needs_web_search(
-            user_message
-        )
-
-
-        # ====================================================
-        # WEB SEARCH MODE
-        # ====================================================
-
+        # Search the web only when the question appears time-sensitive.
         if (
-            search_required
+            needs_web_search(user_message)
             and search_tool is not None
         ):
 
-            print(
-                "--- Searching DuckDuckGo ---"
-            )
-
+            print("Searching DuckDuckGo...")
 
             try:
-
-                search_results = (
-                    search_tool.invoke(
-                        user_message
-                    )
+                search_results = search_tool.invoke(
+                    user_message
                 )
 
-
-            except Exception as search_error:
-
-                print(
-                    f"--- Search error: {search_error} ---"
-                )
-
-                search_results = (
-                    "Web search was unavailable."
-                )
-
-
-            # ------------------------------------------------
-            # Send Search Results to Groq
-            # ------------------------------------------------
-
-            search_prompt = HumanMessage(
-                content=(
-                    f"User question:\n"
-                    f"{user_message}\n\n"
-
-                    f"DuckDuckGo search results:\n"
-                    f"{search_results}\n\n"
-
-                    "Answer the user's question using "
-                    "the search results above.\n\n"
-
-                    "Instructions:\n"
-                    "- Give the most useful answer possible.\n"
-                    "- For current information such as "
-                    "sports scores, news, prices, weather, "
-                    "or schedules, rely on the search results.\n"
-                    "- Do not invent missing information.\n"
-                    "- If the search results are insufficient, "
-                    "say so honestly."
-                )
-            )
-
+            except Exception as e:
+                print(f"Search failed: {e}")
+                search_results = "Web search was unavailable."
 
             messages.append(
-                search_prompt
+                HumanMessage(
+                    content=(
+                        f"User question:\n"
+                        f"{user_message}\n\n"
+                        f"Search results:\n"
+                        f"{search_results}\n\n"
+                        "Answer the user's question using "
+                        "the search results above. Do not "
+                        "make up information that is not "
+                        "supported by them."
+                    )
+                )
             )
-
-
-            response = llm.invoke(
-                messages
-            )
-
-
-        # ====================================================
-        # NORMAL CHAT MODE
-        # ====================================================
 
         else:
-
-            print(
-                "--- Using Groq without web search ---"
-            )
-
 
             messages.append(
                 HumanMessage(
@@ -437,36 +222,17 @@ def run_normal_chat(
                 )
             )
 
-
-            response = llm.invoke(
-                messages
-            )
-
-
-        # ====================================================
-        # Extract Response
-        # ====================================================
+        response = llm.invoke(messages)
 
         answer = response.content
 
-
-        if isinstance(
-            answer,
-            list
-        ):
-
+        if isinstance(answer, list):
             answer = "\n".join(
                 str(item)
                 for item in answer
             )
 
-
         answer = str(answer)
-
-
-        # ====================================================
-        # Save History
-        # ====================================================
 
         session_state.history.add_user_message(
             user_message
@@ -476,43 +242,15 @@ def run_normal_chat(
             answer
         )
 
-
         return answer
 
-
     except Exception as e:
-
         traceback.print_exc()
-
-        return (
-            f"Error while generating response: {str(e)}"
-        )
+        return f"Error while generating response: {str(e)}"
 
 
-# ============================================================
-# RAG Chain
-# ============================================================
-
-def create_rag_chain(
-    vectorstore
-):
-
-    """
-    Modern LCEL RAG pipeline:
-
-    User Question
-          ↓
-    FAISS Retriever
-          ↓
-    Relevant Documents
-          ↓
-    Context
-          ↓
-    Groq
-          ↓
-    Answer
-    """
-
+# Create the RAG function used after a document is uploaded.
+def create_rag_chain(vectorstore):
 
     retriever = vectorstore.as_retriever(
         search_kwargs={
@@ -520,189 +258,167 @@ def create_rag_chain(
         }
     )
 
-
-    # ========================================================
-    # RAG Prompt
-    # ========================================================
-
-    rag_prompt = ChatPromptTemplate.from_messages(
+    prompt = ChatPromptTemplate.from_messages(
         [
-
             (
                 "system",
                 (
                     "You are Eureka, a helpful AI assistant.\n\n"
-
-                    "Answer the user's question using "
-                    "the provided document context.\n\n"
-
-                    "Rules:\n"
-
-                    "1. Use the uploaded document as "
-                    "the primary source.\n"
-
-                    "2. Do not invent information that "
-                    "is not supported by the document.\n"
-
-                    "3. If the answer cannot be found "
-                    "in the document, clearly state that "
-                    "the information is not available "
-                    "in the uploaded document.\n"
-
-                    "4. Give a clear and concise answer.\n\n"
-
-                    "DOCUMENT CONTEXT:\n"
-                    "{context}"
+                    "Answer the user's question using the "
+                    "provided document context.\n\n"
+                    "Use the document as the primary source "
+                    "and do not invent information.\n\n"
+                    "If the answer cannot be found in the "
+                    "document, clearly say that the information "
+                    "is not available in the uploaded document."
                 )
             ),
-
             (
                 "human",
-                "{input}"
+                (
+                    "Document context:\n"
+                    "{context}\n\n"
+                    "Question:\n"
+                    "{question}"
+                )
             )
-
         ]
     )
 
+    def answer_question(question):
 
-    # ========================================================
-    # Format Documents
-    # ========================================================
+        # Retrieve the most relevant document chunks.
+        documents = retriever.invoke(question)
 
-    def format_docs(
-        docs
-    ):
+        if not documents:
+            return {
+                "answer": (
+                    "I couldn't find relevant information "
+                    "in the uploaded document."
+                ),
+                "sources": []
+            }
 
-        return "\n\n".join(
-            doc.page_content
-            for doc in docs
+        # Combine the retrieved chunks into the context for the LLM.
+        context = "\n\n---\n\n".join(
+            document.page_content
+            for document in documents
         )
 
+        messages = prompt.invoke(
+            {
+                "context": context,
+                "question": question
+            }
+        )
 
-    # ========================================================
-    # LCEL RAG Chain
-    # ========================================================
+        response = llm.invoke(messages)
 
-    rag_chain = (
+        answer = response.content
 
-        {
-            "context": (
-                retriever
-                | format_docs
-            ),
-
-            "input": (
-                RunnablePassthrough()
+        if isinstance(answer, list):
+            answer = "\n".join(
+                str(item)
+                for item in answer
             )
+
+        # Get the source file and page from the document metadata.
+        sources = []
+
+        for document in documents:
+
+            source_path = document.metadata.get(
+                "source",
+                "Unknown document"
+            )
+
+            filename = os.path.basename(
+                source_path
+            )
+
+            page = document.metadata.get(
+                "page"
+            )
+
+            if page is not None:
+                page_number = page + 1
+                label = (
+                    f"{filename} - Page {page_number}"
+                )
+            else:
+                page_number = None
+                label = filename
+
+            source = {
+                "file": filename,
+                "page": page_number,
+                "label": label
+            }
+
+            # Don't show the same source more than once.
+            if source not in sources:
+                sources.append(source)
+
+        return {
+            "answer": str(answer),
+            "sources": sources
         }
 
-        | rag_prompt
-
-        | llm
-
-        | StrOutputParser()
-    )
+    return answer_question
 
 
-    return rag_chain
-
-
-# ============================================================
-# Upload Endpoint
-# ============================================================
-
-@app.route(
-    "/upload",
-    methods=["POST"]
-)
+# Upload a PDF or DOCX file and create its vector index.
+@app.route("/upload", methods=["POST"])
 def upload_file():
 
     session_state = get_session_state(
         "user_session_123"
     )
 
-
-    # ========================================================
-    # Check Embeddings
-    # ========================================================
-
     if embeddings is None:
-
         return jsonify(
             {
-                "error": (
-                    "Embeddings model is not available."
-                )
+                "error": "Embedding model is not available."
             }
         ), 500
 
-
-    # ========================================================
-    # Check File
-    # ========================================================
-
     if "file" not in request.files:
-
         return jsonify(
             {
-                "error": "No file part"
+                "error": "No file was uploaded."
             }
         ), 400
-
 
     file = request.files["file"]
 
-
-    if file.filename == "":
-
+    if not file.filename:
         return jsonify(
             {
-                "error": "No selected file"
+                "error": "No file was selected."
             }
         ), 400
-
-
-    # ========================================================
-    # Save File
-    # ========================================================
 
     filename = secure_filename(
         file.filename
     )
-
 
     filepath = os.path.join(
         app.config["UPLOAD_FOLDER"],
         filename
     )
 
-
     file.save(filepath)
-
 
     try:
 
-        # ====================================================
-        # Select Loader
-        # ====================================================
+        # Choose the loader based on the uploaded file type.
+        if filename.lower().endswith(".pdf"):
 
-        if filename.lower().endswith(
-            ".pdf"
-        ):
+            loader = PyPDFLoader(filepath)
 
-            loader = PyPDFLoader(
-                filepath
-            )
+        elif filename.lower().endswith(".docx"):
 
-
-        elif filename.lower().endswith(
-            ".docx"
-        ):
-
-            loader = Docx2txtLoader(
-                filepath
-            )
-
+            loader = Docx2txtLoader(filepath)
 
         else:
 
@@ -712,149 +428,101 @@ def upload_file():
                 {
                     "error": (
                         "Unsupported file type. "
-                        "Please upload PDF or DOCX."
+                        "Please upload a PDF or DOCX file."
                     )
                 }
             ), 400
 
+        documents = loader.load()
 
-        # ====================================================
-        # Load Documents
-        # ====================================================
-
-        docs = loader.load()
-
-
-        if not docs:
+        if not documents:
 
             os.remove(filepath)
 
             return jsonify(
                 {
                     "error": (
-                        "Could not extract text "
-                        "from the document."
+                        "No readable text was found "
+                        "in the document."
                     )
                 }
             ), 400
 
-
         print(
-            f"--- Loaded {len(docs)} document pages ---"
+            f"Loaded {len(documents)} document pages."
         )
 
-
-        # ====================================================
-        # Split Documents
-        # ====================================================
-
-        text_splitter = RecursiveCharacterTextSplitter(
+        # Split large documents into smaller chunks for retrieval.
+        splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200
         )
 
-
-        splits = text_splitter.split_documents(
-            docs
+        chunks = splitter.split_documents(
+            documents
         )
 
-
-        if not splits:
+        if not chunks:
 
             os.remove(filepath)
 
             return jsonify(
                 {
                     "error": (
-                        "No text could be extracted "
-                        "after splitting the document."
+                        "The document could not be "
+                        "split into text chunks."
                     )
                 }
             ), 400
 
-
         print(
-            f"--- Created {len(splits)} document chunks ---"
+            f"Created {len(chunks)} text chunks."
         )
 
-
-        # ====================================================
-        # Create FAISS Vector Store
-        # ====================================================
-
+        # Create the FAISS vector database from the chunks.
         vectorstore = FAISS.from_documents(
-            documents=splits,
+            documents=chunks,
             embedding=embeddings
         )
 
+        print("FAISS vector store created.")
 
-        print(
-            "--- FAISS vector store created successfully ---"
+        # Create a RAG function for the uploaded document.
+        session_state.rag_chain = create_rag_chain(
+            vectorstore
         )
 
-
-        # ====================================================
-        # Create RAG Chain
-        # ====================================================
-
-        session_state.rag_chain = (
-            create_rag_chain(
-                vectorstore
-            )
-        )
-
-
-        # ====================================================
-        # Clear Previous History
-        # ====================================================
-
+        # Start a fresh conversation for the new document.
         session_state.history.clear()
 
-
-        # ====================================================
-        # Delete Temporary File
-        # ====================================================
-
-        if os.path.exists(filepath):
-
-            os.remove(filepath)
-
+        # The document is no longer needed after indexing.
+        os.remove(filepath)
 
         return jsonify(
             {
                 "success": True,
                 "message": (
-                    f"File '{filename}' "
-                    "processed successfully."
+                    f"'{filename}' was processed successfully."
                 )
             }
         ), 200
-
 
     except Exception as e:
 
         traceback.print_exc()
 
-
         if os.path.exists(filepath):
-
             os.remove(filepath)
-
 
         return jsonify(
             {
-                "error": (
-                    "Failed to process file."
-                ),
+                "error": "Failed to process the document.",
                 "details": str(e)
             }
         ), 500
 
 
-# ============================================================
-# Clear Document Endpoint
-# ============================================================
-
+# Remove the current document from the session.
 @app.route(
     "/clear_document",
     methods=["POST"]
@@ -865,26 +533,18 @@ def clear_document():
         "user_session_123"
     )
 
-
     session_state.rag_chain = None
-
     session_state.history.clear()
-
 
     return jsonify(
         {
             "success": True,
-            "message": (
-                "Document context cleared."
-            )
+            "message": "Document context cleared."
         }
     ), 200
 
 
-# ============================================================
-# Chat Endpoint
-# ============================================================
-
+# Handle chat messages.
 @app.route(
     "/chat",
     methods=["POST"]
@@ -893,100 +553,76 @@ def chat():
 
     data = request.json
 
-
     if not data:
-
         return Response(
-            "Error: Invalid JSON request",
+            "Error: Invalid JSON request.",
             status=400
         )
 
-
-    user_message = data.get(
-        "message"
-    )
-
+    user_message = data.get("message")
 
     if not user_message:
-
         return Response(
-            "Error: No message provided",
+            "Error: No message provided.",
             status=400
         )
-
 
     session_state = get_session_state(
         "user_session_123"
     )
 
-
-    # ========================================================
-    # Generate Response
-    # ========================================================
-
     def generate_response():
 
         try:
 
-            # =================================================
-            # RAG MODE
-            # =================================================
-
+            # Use the uploaded document when RAG is active.
             if session_state.rag_chain is not None:
 
-                print(
-                    "--- Using RAG document mode ---"
+                print("Using document RAG.")
+
+                result = session_state.rag_chain(
+                    user_message
                 )
 
-
-                response_data = (
-                    session_state.rag_chain.invoke(
-                        user_message
-                    )
+                answer = result.get(
+                    "answer",
+                    "No answer found."
                 )
 
+                sources = result.get(
+                    "sources",
+                    []
+                )
 
-                if response_data:
+                # Add the retrieved document sources to the answer.
+                if sources:
 
-                    yield str(
-                        response_data
-                    )
+                    answer += "\n\nSources:\n"
 
-                else:
+                    for source in sources:
 
-                    yield (
-                        "No answer found in the document."
-                    )
+                        answer += (
+                            f"• {source['label']}\n"
+                        )
 
-
-            # =================================================
-            # NORMAL CHAT MODE
-            # =================================================
+                yield answer
 
             else:
 
-                print(
-                    "--- Using normal chat mode ---"
-                )
-
+                print("Using normal chat.")
 
                 answer = run_normal_chat(
                     user_message,
                     session_state
                 )
 
-
                 yield answer
-
 
         except Exception as e:
 
             traceback.print_exc()
 
-            yield (
-                f"Error: {str(e)}"
-            )
-
+            yield f"Error: {str(e)}"
 
     return Response(
         generate_response(),
@@ -994,10 +630,7 @@ def chat():
     )
 
 
-# ============================================================
-# Root Route
-# ============================================================
-
+# Serve the frontend.
 @app.route("/")
 def serve_frontend():
 
@@ -1006,7 +639,6 @@ def serve_frontend():
         "index.html"
     )
 
-
     if os.path.exists(index_path):
 
         return send_from_directory(
@@ -1014,21 +646,15 @@ def serve_frontend():
             "index.html"
         )
 
-
     return (
         "🚀 Eureka Chatbot is running!",
         200
     )
 
 
-# ============================================================
-# Start Flask Server
-# ============================================================
-
 if __name__ == "__main__":
 
     store.clear()
-
 
     app.run(
         host="0.0.0.0",
