@@ -3,7 +3,11 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <title>Eureka AI Chatbot</title>
 
@@ -12,69 +16,99 @@
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     >
 
-    <link rel="stylesheet" href="style.css">
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
 </head>
 
 <body class="loading">
 
     <div id="loader">
+
         <div class="spinner"></div>
-        <p>Eureka is waking up... ✨</p>
+
+        <p>
+            Eureka is waking up... ✨
+        </p>
+
     </div>
+
 
     <div class="app-container">
 
         <aside class="sidebar">
 
+            <!-- Document upload -->
+
             <div class="sidebar-block file-upload-area">
 
                 <div class="section-heading">
-                    <div>
-                        <h4>Upload Documents 📄</h4>
-                        <p>PDF or DOCX · Max 25 MB each</p>
-                    </div>
+
+                    <h4>
+                        Upload Document 📄
+                    </h4>
+
+                    <p>
+                        Add a PDF or DOCX file
+                    </p>
+
                 </div>
 
-                <div id="upload-zone" class="upload-zone">
 
-                    <i class="fas fa-cloud-arrow-up"></i>
+                <div
+                    id="upload-zone"
+                    class="upload-zone"
+                >
+
+                    <i class="fas fa-file-arrow-up"></i>
 
                     <p class="upload-title">
-                        Drag & drop or click to browse
+                        Drag & drop your file
                     </p>
 
                     <p class="upload-subtitle">
-                        Up to 5 documents
+                        or click to browse
                     </p>
 
                 </div>
+
 
                 <input
                     type="file"
                     id="file-input"
-                    hidden
+                    accept=".pdf,.docx"
                     multiple
-                    accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    hidden
                 >
 
             </div>
 
 
+            <!-- Uploaded documents -->
+
             <div class="sidebar-block file-list-area">
 
                 <div class="documents-header">
 
-                    <div>
-                        <h4>Uploaded Documents 📁</h4>
-                    </div>
+                    <h4>
+                        Uploaded Documents 📁
+                    </h4>
 
-                    <span id="document-count" class="document-count">
+                    <span
+                        id="document-count"
+                        class="document-count"
+                    >
                         0 / 5
                     </span>
 
                 </div>
 
-                <div id="file-list" class="file-list">
+
+                <div
+                    id="file-list"
+                    class="file-list"
+                >
 
                     <p class="no-files">
                         📪 No documents uploaded yet.
@@ -82,17 +116,10 @@
 
                 </div>
 
-                <button
-                    id="clear-documents-btn"
-                    class="clear-documents-btn"
-                    disabled
-                >
-                    <i class="fas fa-trash-can"></i>
-                    Clear Documents
-                </button>
-
             </div>
 
+
+            <!-- Theme -->
 
             <div class="sidebar-block theme-area">
 
@@ -108,6 +135,7 @@
                     </span>
 
                 </div>
+
 
                 <label class="theme-switch">
 
@@ -125,45 +153,54 @@
         </aside>
 
 
+        <!-- Main chat panel -->
+
         <main class="chat-panel">
 
-            <div class="chat-header">
+
+            <!-- Chat header -->
+
+            <header class="chat-header">
 
                 <div>
-                    <h1>EUREKA! 💡</h1>
+
+                    <h1>
+                        EUREKA! 💡
+                    </h1>
 
                     <p class="chat-subtitle">
-                        AI Assistant · RAG · Web Search
+                        AI assistant with document intelligence
                     </p>
+
                 </div>
+
 
                 <div
                     id="chat-status"
                     class="chat-status"
                 >
+
                     <span class="status-dot"></span>
-                    Ready
+
+                    <span>
+                        Online
+                    </span>
+
                 </div>
 
-            </div>
+            </header>
 
 
-            <div id="chat-box" class="chat-box">
-            </div>
-
+            <!-- Chat messages -->
 
             <div
-                id="rag-status"
-                class="rag-status hidden"
+                id="chat-box"
+                class="chat-box"
             >
-                <i class="fas fa-book-open"></i>
-
-                <span id="rag-status-text">
-                    Searching uploaded documents...
-                </span>
-
             </div>
 
+
+            <!-- Input -->
 
             <div class="input-area">
 
@@ -174,11 +211,15 @@
                     autocomplete="off"
                 >
 
+
                 <button
                     id="send-btn"
+                    type="button"
                     title="Send message"
                 >
+
                     <i class="fas fa-paper-plane"></i>
+
                 </button>
 
             </div>
@@ -188,7 +229,9 @@
     </div>
 
 
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"
+    ></script>
 
     <script src="script.js"></script>
 
