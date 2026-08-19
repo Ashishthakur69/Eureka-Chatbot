@@ -50,6 +50,8 @@ body {
         color var(--transition-speed);
 }
 
+/* Loading screen */
+
 #loader {
     position: fixed;
     z-index: 999;
@@ -99,14 +101,20 @@ body:not(.loading) .app-container {
     }
 }
 
+/* Main application layout */
+
 .app-container {
     width: 100%;
     height: 100%;
 
     max-width: 1400px;
 
+    display: flex;
+
     gap: 20px;
 }
+
+/* Sidebar stays vertical at every screen size */
 
 .sidebar {
     width: 320px;
@@ -117,6 +125,8 @@ body:not(.loading) .app-container {
 
     gap: 20px;
 }
+
+/* Sidebar cards */
 
 .sidebar-block {
     background-color: var(--container-bg);
@@ -134,10 +144,13 @@ body:not(.loading) .app-container {
 
 .sidebar-block h4 {
     font-weight: 600;
+
     color: var(--text-primary);
 
     margin-bottom: 5px;
 }
+
+/* Upload section */
 
 .file-upload-area {
     flex-shrink: 0;
@@ -145,6 +158,7 @@ body:not(.loading) .app-container {
 
 .file-upload-area p {
     color: var(--text-secondary);
+
     font-size: 0.78rem;
 }
 
@@ -175,6 +189,7 @@ body:not(.loading) .app-container {
 
 .upload-zone:hover {
     border-color: var(--accent-color);
+
     transform: translateY(-2px);
 }
 
@@ -207,12 +222,14 @@ body:not(.loading) .app-container {
     font-size: 0.78rem;
 }
 
+/* Uploaded documents */
+
 .file-list-area {
     flex: 1;
 
     min-height: 0;
 
-    overflow-y: auto;
+    overflow: hidden;
 }
 
 .documents-header {
@@ -240,6 +257,8 @@ body:not(.loading) .app-container {
 
 .file-list {
     overflow-y: auto;
+
+    max-height: 100%;
 }
 
 .file-list .no-files {
@@ -328,6 +347,8 @@ body:not(.loading) .app-container {
     color: var(--danger-color);
 }
 
+/* Clear documents button */
+
 .clear-documents-btn {
     width: 100%;
 
@@ -366,6 +387,8 @@ body:not(.loading) .app-container {
 
     cursor: not-allowed;
 }
+
+/* Theme section */
 
 .theme-area {
     flex-shrink: 0;
@@ -447,6 +470,8 @@ input:checked + .slider:before {
     transform: translateX(22px);
 }
 
+/* Chat panel */
+
 .chat-panel {
     flex-grow: 1;
 
@@ -468,6 +493,8 @@ input:checked + .slider:before {
         background-color var(--transition-speed),
         border-color var(--transition-speed);
 }
+
+/* Chat header */
 
 .chat-header {
     padding: 20px;
@@ -539,6 +566,8 @@ input:checked + .slider:before {
         opacity: 1;
     }
 }
+
+/* Chat messages */
 
 .chat-box {
     flex-grow: 1;
@@ -629,6 +658,8 @@ body.light-theme .message.user {
     background-color: rgba(0, 0, 0, 0.18);
 }
 
+/* Copy button */
+
 .copy-btn {
     position: absolute;
 
@@ -669,6 +700,38 @@ body.light-theme .message.user {
     color: var(--text-primary);
 }
 
+/* RAG status */
+
+.rag-status {
+    margin: 0 20px 5px;
+
+    padding: 8px 12px;
+
+    border-radius: 10px;
+
+    background-color: rgba(47, 129, 247, 0.08);
+
+    color: var(--text-secondary);
+
+    font-size: 0.75rem;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+}
+
+.rag-status i {
+    color: var(--accent-color);
+}
+
+.rag-status.hidden {
+    display: none;
+}
+
+/* Sources */
+
 .sources {
     margin-top: 15px;
 
@@ -707,33 +770,7 @@ body.light-theme .message.user {
     margin-right: 5px;
 }
 
-.rag-status {
-    margin: 0 20px 5px;
-
-    padding: 8px 12px;
-
-    border-radius: 10px;
-
-    background-color: rgba(47, 129, 247, 0.08);
-
-    color: var(--text-secondary);
-
-    font-size: 0.75rem;
-
-    display: flex;
-
-    align-items: center;
-
-    gap: 8px;
-}
-
-.rag-status i {
-    color: var(--accent-color);
-}
-
-.rag-status.hidden {
-    display: none;
-}
+/* Input area */
 
 .input-area {
     padding: 20px;
@@ -821,11 +858,15 @@ body.light-theme .message.user {
     cursor: not-allowed;
 }
 
+/* Upload state */
+
 .uploading {
     opacity: 0.7;
 
     pointer-events: none;
 }
+
+/* Animations */
 
 @keyframes slideInUp {
     from {
@@ -841,18 +882,20 @@ body.light-theme .message.user {
     }
 }
 
+/* Scrollbars */
+
 .chat-box::-webkit-scrollbar,
-.file-list-area::-webkit-scrollbar {
+.file-list::-webkit-scrollbar {
     width: 8px;
 }
 
 .chat-box::-webkit-scrollbar-track,
-.file-list-area::-webkit-scrollbar-track {
+.file-list::-webkit-scrollbar-track {
     background: transparent;
 }
 
 .chat-box::-webkit-scrollbar-thumb,
-.file-list-area::-webkit-scrollbar-thumb {
+.file-list::-webkit-scrollbar-thumb {
     background-color: var(--element-bg);
 
     border-radius: 10px;
@@ -861,73 +904,105 @@ body.light-theme .message.user {
 }
 
 .chat-box::-webkit-scrollbar-thumb:hover,
-.file-list-area::-webkit-scrollbar-thumb:hover {
+.file-list::-webkit-scrollbar-thumb:hover {
     background-color: var(--border-color);
 }
+
+/* Smaller desktop windows */
+
+@media (max-width: 1100px) {
+
+    body {
+        padding: 12px;
+    }
+
+    .app-container {
+        gap: 12px;
+    }
+
+    .sidebar {
+        width: 270px;
+        gap: 12px;
+    }
+
+    .sidebar-block {
+        padding: 16px;
+
+        border-radius: 20px;
+    }
+
+    .upload-zone {
+        padding: 22px 12px;
+    }
+
+    .chat-header {
+        padding: 18px;
+    }
+
+    .chat-box {
+        padding: 18px;
+    }
+
+    .input-area {
+        padding: 15px;
+    }
+}
+
+/* Narrow desktop window */
 
 @media (max-width: 850px) {
 
     body {
-        padding: 10px;
-        height: auto;
-        min-height: 100vh;
+        padding: 8px;
     }
 
     .app-container {
-        height: calc(100vh - 20px);
-
-        flex-direction: column;
-
-        gap: 10px;
+        gap: 8px;
     }
 
     .sidebar {
-        width: 100%;
-
-        display: grid;
-
-        grid-template-columns: 1fr 1fr;
-
-        gap: 10px;
+        width: 230px;
+        gap: 8px;
     }
 
     .sidebar-block {
+        padding: 14px;
+
         border-radius: 18px;
-
-        padding: 15px;
     }
 
-    .theme-area {
-        display: none;
+    .sidebar-block h4 {
+        font-size: 0.9rem;
     }
 
-    .file-list-area {
-        min-height: 160px;
+    .file-upload-area p {
+        font-size: 0.7rem;
     }
 
-    .chat-panel {
-        min-height: 0;
-
-        flex: 1;
+    .upload-zone {
+        padding: 20px 8px;
     }
 
-    .message {
-        max-width: 85%;
-    }
-}
-
-@media (max-width: 600px) {
-
-    .sidebar {
-        display: block;
+    .upload-zone i {
+        font-size: 1.7rem;
     }
 
-    .sidebar-block {
-        margin-bottom: 10px;
+    .upload-title {
+        font-size: 0.78rem;
     }
 
-    .file-list-area {
-        max-height: 180px;
+    .upload-subtitle {
+        font-size: 0.7rem;
+    }
+
+    .file-item {
+        padding: 9px;
+
+        font-size: 0.75rem;
+    }
+
+    .file-status {
+        font-size: 0.65rem;
     }
 
     .chat-header {
@@ -935,11 +1010,11 @@ body.light-theme .message.user {
     }
 
     .chat-header h1 {
-        font-size: 1.25rem;
+        font-size: 1.3rem;
     }
 
-    .chat-status {
-        display: none;
+    .chat-subtitle {
+        font-size: 0.7rem;
     }
 
     .chat-box {
@@ -949,12 +1024,230 @@ body.light-theme .message.user {
     .input-area {
         padding: 12px;
     }
+}
 
-    .message {
-        max-width: 90%;
+/* Very narrow desktop window */
+
+@media (max-width: 650px) {
+
+    body {
+        padding: 6px;
     }
 
-    .copy-btn {
+    .app-container {
+        gap: 6px;
+    }
+
+    .sidebar {
+        width: 200px;
+        gap: 6px;
+    }
+
+    .sidebar-block {
+        padding: 12px;
+
+        border-radius: 16px;
+    }
+
+    .sidebar-block h4 {
+        font-size: 0.8rem;
+    }
+
+    .upload-zone {
+        padding: 16px 6px;
+    }
+
+    .upload-zone i {
+        font-size: 1.4rem;
+    }
+
+    .upload-title {
+        font-size: 0.68rem;
+    }
+
+    .upload-subtitle {
+        font-size: 0.62rem;
+    }
+
+    .document-count {
+        font-size: 0.6rem;
+
+        padding: 4px 6px;
+    }
+
+    .file-item {
+        padding: 7px;
+
+        gap: 5px;
+    }
+
+    .file-status {
         display: none;
+    }
+
+    .clear-documents-btn {
+        font-size: 0.7rem;
+
+        padding: 8px;
+    }
+
+    .theme-label {
+        font-size: 0.75rem;
+    }
+
+    .theme-switch {
+        width: 42px;
+        height: 24px;
+    }
+
+    .slider:before {
+        width: 17px;
+        height: 17px;
+
+        bottom: 3.5px;
+        left: 3px;
+    }
+
+    input:checked + .slider:before {
+        transform: translateX(18px);
+    }
+
+    .chat-header h1 {
+        font-size: 1.1rem;
+    }
+
+    .chat-subtitle {
+        font-size: 0.6rem;
+    }
+
+    .chat-status {
+        font-size: 0.6rem;
+    }
+
+    .message {
+        max-width: 85%;
+
+        padding: 11px 13px;
+
+        font-size: 0.8rem;
+    }
+
+    #user-input {
+        padding: 11px 13px;
+
+        font-size: 0.8rem;
+    }
+
+    #send-btn {
+        width: 44px;
+        height: 44px;
+
+        font-size: 1rem;
+    }
+}
+
+/* Small screens */
+
+@media (max-width: 480px) {
+
+    body {
+        padding: 4px;
+    }
+
+    .app-container {
+        gap: 5px;
+    }
+
+    .sidebar {
+        width: 175px;
+    }
+
+    .sidebar-block {
+        padding: 10px;
+
+        border-radius: 14px;
+    }
+
+    .sidebar-block h4 {
+        font-size: 0.72rem;
+    }
+
+    .upload-zone {
+        padding: 13px 5px;
+    }
+
+    .upload-zone i {
+        font-size: 1.2rem;
+    }
+
+    .upload-title {
+        font-size: 0.6rem;
+    }
+
+    .upload-subtitle {
+        font-size: 0.55rem;
+    }
+
+    .file-item {
+        font-size: 0.65rem;
+    }
+
+    .clear-documents-btn {
+        font-size: 0.6rem;
+    }
+
+    .theme-label {
+        font-size: 0.65rem;
+    }
+
+    .theme-switch {
+        width: 36px;
+        height: 21px;
+    }
+
+    .slider:before {
+        width: 15px;
+        height: 15px;
+    }
+
+    input:checked + .slider:before {
+        transform: translateX(15px);
+    }
+
+    .chat-header {
+        padding: 12px;
+    }
+
+    .chat-header h1 {
+        font-size: 0.95rem;
+    }
+
+    .chat-subtitle {
+        display: none;
+    }
+
+    .chat-status {
+        display: none;
+    }
+
+    .chat-box {
+        padding: 10px;
+    }
+
+    .input-area {
+        padding: 8px;
+
+        gap: 6px;
+    }
+
+    #user-input {
+        padding: 10px;
+
+        font-size: 0.75rem;
+    }
+
+    #send-btn {
+        width: 40px;
+        height: 40px;
     }
 }
