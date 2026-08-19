@@ -4,6 +4,7 @@ from flask_cors import CORS
 import os
 import traceback
 from typing import ClassVar
+
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 
@@ -33,7 +34,14 @@ app = Flask(
 
 app.config["UPLOAD_FOLDER"] = "uploads"
 
+# Limit each uploaded file to 25 MB.
+app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
+
 CORS(app)
+
+
+# Maximum number of documents that can be active at once.
+MAX_DOCUMENTS = 5
 
 
 # Load the Groq API key from the environment.
@@ -94,12 +102,14 @@ class WindowedChatMessageHistory(ChatMessageHistory):
             self.messages = self.messages[-(self.k * 2):]
 
 
-# Store the current conversation and document context.
+# Store the conversation, vector database and uploaded file names.
 class SessionState:
 
     def __init__(self):
         self.history = WindowedChatMessageHistory()
+        self.vectorstore = None
         self.rag_chain = None
+        self.documents = []
 
 
 store = {}
@@ -156,7 +166,7 @@ def needs_web_search(user_message):
     )
 
 
-# Handle normal conversations when no document is uploaded.
+# Handle normal conversations when no document is being used.
 def run_normal_chat(user_message, session_state):
 
     try:
@@ -249,7 +259,7 @@ def run_normal_chat(user_message, session_state):
         return f"Error while generating response: {str(e)}"
 
 
-# Create the RAG function used after a document is uploaded.
+# Create the RAG function used for the current document collection.
 def create_rag_chain(vectorstore):
 
     retriever = vectorstore.as_retriever(
@@ -266,11 +276,16 @@ def create_rag_chain(vectorstore):
                     "You are Eureka, a helpful AI assistant.\n\n"
                     "Answer the user's question using the "
                     "provided document context.\n\n"
-                    "Use the document as the primary source "
+                    "Use the documents as the primary source "
                     "and do not invent information.\n\n"
+                    "The context may contain information "
+                    "from several different documents. "
+                    "Combine information from them when "
+                    "necessary to answer the question.\n\n"
                     "If the answer cannot be found in the "
-                    "document, clearly say that the information "
-                    "is not available in the uploaded document."
+                    "provided documents, clearly say that "
+                    "the information is not available "
+                    "in the uploaded documents."
                 )
             ),
             (
@@ -287,22 +302,50 @@ def create_rag_chain(vectorstore):
 
     def answer_question(question):
 
-        # Retrieve the most relevant document chunks.
+        # Retrieve the most relevant chunks from all uploaded documents.
         documents = retriever.invoke(question)
 
         if not documents:
             return {
                 "answer": (
                     "I couldn't find relevant information "
-                    "in the uploaded document."
+                    "in the uploaded documents."
                 ),
                 "sources": []
             }
 
         # Combine the retrieved chunks into the context for the LLM.
+        context_parts = []
+
+        for document in documents:
+
+            source_path = document.metadata.get(
+                "source",
+                "Unknown document"
+            )
+
+            filename = os.path.basename(
+                source_path
+            )
+
+            page = document.metadata.get(
+                "page"
+            )
+
+            if page is not None:
+                source_label = (
+                    f"{filename} - Page {page + 1}"
+                )
+            else:
+                source_label = filename
+
+            context_parts.append(
+                f"Source: {source_label}\n"
+                f"{document.page_content}"
+            )
+
         context = "\n\n---\n\n".join(
-            document.page_content
-            for document in documents
+            context_parts
         )
 
         messages = prompt.invoke(
@@ -322,7 +365,7 @@ def create_rag_chain(vectorstore):
                 for item in answer
             )
 
-        # Get the source file and page from the document metadata.
+        # Collect unique sources used for the answer.
         sources = []
 
         for document in documents:
@@ -355,7 +398,6 @@ def create_rag_chain(vectorstore):
                 "label": label
             }
 
-            # Don't show the same source more than once.
             if source not in sources:
                 sources.append(source)
 
@@ -367,7 +409,31 @@ def create_rag_chain(vectorstore):
     return answer_question
 
 
-# Upload a PDF or DOCX file and create its vector index.
+# Create or update the RAG index with a new document.
+def add_document_to_vectorstore(
+    session_state,
+    chunks
+):
+
+    if session_state.vectorstore is None:
+
+        session_state.vectorstore = FAISS.from_documents(
+            documents=chunks,
+            embedding=embeddings
+        )
+
+    else:
+
+        session_state.vectorstore.add_documents(
+            chunks
+        )
+
+    session_state.rag_chain = create_rag_chain(
+        session_state.vectorstore
+    )
+
+
+# Upload a PDF or DOCX file and add it to the current collection.
 @app.route("/upload", methods=["POST"])
 def upload_file():
 
@@ -381,6 +447,18 @@ def upload_file():
                 "error": "Embedding model is not available."
             }
         ), 500
+
+    # Check the number of documents already uploaded.
+    if len(session_state.documents) >= MAX_DOCUMENTS:
+
+        return jsonify(
+            {
+                "error": (
+                    f"You can upload a maximum of "
+                    f"{MAX_DOCUMENTS} documents."
+                )
+            }
+        ), 400
 
     if "file" not in request.files:
         return jsonify(
@@ -402,6 +480,17 @@ def upload_file():
         file.filename
     )
 
+    # Prevent uploading the same filename twice.
+    if filename in session_state.documents:
+
+        return jsonify(
+            {
+                "error": (
+                    f"'{filename}' is already uploaded."
+                )
+            }
+        ), 400
+
     filepath = os.path.join(
         app.config["UPLOAD_FOLDER"],
         filename
@@ -411,7 +500,7 @@ def upload_file():
 
     try:
 
-        # Choose the loader based on the uploaded file type.
+        # Choose the loader based on the file type.
         if filename.lower().endswith(".pdf"):
 
             loader = PyPDFLoader(filepath)
@@ -449,10 +538,10 @@ def upload_file():
             ), 400
 
         print(
-            f"Loaded {len(documents)} document pages."
+            f"Loaded {len(documents)} pages from {filename}."
         )
 
-        # Split large documents into smaller chunks for retrieval.
+        # Split the document into smaller chunks for retrieval.
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200
@@ -475,34 +564,41 @@ def upload_file():
                 }
             ), 400
 
+        # Add the filename to every chunk so citations
+        # continue to work after documents are combined.
+        for chunk in chunks:
+
+            chunk.metadata["source"] = filename
+
         print(
-            f"Created {len(chunks)} text chunks."
+            f"Created {len(chunks)} chunks from {filename}."
         )
 
-        # Create the FAISS vector database from the chunks.
-        vectorstore = FAISS.from_documents(
-            documents=chunks,
-            embedding=embeddings
+        # Add the new chunks to the existing FAISS index.
+        add_document_to_vectorstore(
+            session_state,
+            chunks
         )
 
-        print("FAISS vector store created.")
-
-        # Create a RAG function for the uploaded document.
-        session_state.rag_chain = create_rag_chain(
-            vectorstore
+        session_state.documents.append(
+            filename
         )
 
-        # Start a fresh conversation for the new document.
+        # Clear previous conversation when the document
+        # collection changes.
         session_state.history.clear()
 
-        # The document is no longer needed after indexing.
         os.remove(filepath)
 
         return jsonify(
             {
                 "success": True,
                 "message": (
-                    f"'{filename}' was processed successfully."
+                    f"'{filename}' was added successfully."
+                ),
+                "documents": session_state.documents,
+                "document_count": len(
+                    session_state.documents
                 )
             }
         ), 200
@@ -522,7 +618,29 @@ def upload_file():
         ), 500
 
 
-# Remove the current document from the session.
+# Return the list of currently uploaded documents.
+@app.route(
+    "/documents",
+    methods=["GET"]
+)
+def get_documents():
+
+    session_state = get_session_state(
+        "user_session_123"
+    )
+
+    return jsonify(
+        {
+            "documents": session_state.documents,
+            "count": len(
+                session_state.documents
+            ),
+            "max_documents": MAX_DOCUMENTS
+        }
+    ), 200
+
+
+# Remove all uploaded documents and reset the FAISS index.
 @app.route(
     "/clear_document",
     methods=["POST"]
@@ -533,13 +651,16 @@ def clear_document():
         "user_session_123"
     )
 
+    session_state.vectorstore = None
     session_state.rag_chain = None
+    session_state.documents.clear()
     session_state.history.clear()
 
     return jsonify(
         {
             "success": True,
-            "message": "Document context cleared."
+            "message": "All document context cleared.",
+            "documents": []
         }
     ), 200
 
@@ -575,7 +696,7 @@ def chat():
 
         try:
 
-            # Use the uploaded document when RAG is active.
+            # Use RAG when documents have been uploaded.
             if session_state.rag_chain is not None:
 
                 print("Using document RAG.")
@@ -594,7 +715,7 @@ def chat():
                     []
                 )
 
-                # Add the retrieved document sources to the answer.
+                # Show the files and pages used for the answer.
                 if sources:
 
                     answer += "\n\nSources:\n"
