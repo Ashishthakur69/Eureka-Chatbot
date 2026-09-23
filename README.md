@@ -235,10 +235,6 @@ Try Eureka on Hugging Face:
 
 **[Eureka Chatbot — Hugging Face Space](https://huggingface.co/spaces/ashishthakur69/Eureka-Chatbot)**
 
-Source code:
-
-**[Eureka Chatbot — GitHub](https://github.com/Ashishthakur69/Eureka-Chatbot)**
-
 ## 📌 Architecture Notes
 
 - Document embeddings and the FAISS index are maintained in application memory.
@@ -247,23 +243,9 @@ Source code:
 - Web search is triggered selectively for recognized current or time-sensitive signals.
 - The current implementation is primarily designed as a working AI application/demo rather than a multi-user production backend with persistent storage and authentication.
 
-## 🔮 Future Improvements
-
-- Multi-user session management and authentication.
-- Persistent document/vector storage.
-- Streaming token generation with richer status updates.
-- Hybrid semantic + keyword retrieval.
-- Reranking and retrieval evaluation.
-- Better source attribution for web results.
-- Conversation persistence.
-- Production-grade observability and monitoring.
-- Containerized deployment and automated CI/CD.
-
 ## 👨‍💻 Author
 
 **Ashish Thakur**
-
-BCA | AI & Data Science Enthusiast
 
 **GitHub:** [Ashishthakur69](https://github.com/Ashishthakur69)
 
